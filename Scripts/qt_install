@@ -175,7 +175,7 @@ if [[ "$windows" == "1" ]]
       until [ $PID ]
          do
          wine $winfolder/$appname.exe 2>kk &
-         sleep 5s
+         sleep 20s
          PID=$(pgrep $appname)
          if [ -n "$PID" ]
             then
@@ -188,10 +188,11 @@ if [[ "$windows" == "1" ]]
          else
             grep ".dll" kk | cut -d" " -f3 > kk1
             sort -u kk1 > kk
-            IFS=$'\n' read -a dlls <<< $(cat kk)
-            for dll in ${dlls[@]}
+#            IFS=$'\n' read -a dlls <<< $(cat kk)
+#            for dll in ${dlls[@]}
+            for dll in $(cat kk)
                do
-               if [ ! -f $winfolder/$dll ] ; then cp $dllfolder/$dll $winfolder/ ; fi
+               if [ ! -f $winfolder/$dll ] && [ -f $dllfolder/$dll ] ; then cp $dllfolder/$dll $winfolder/ ; fi
             done
          fi
          rm -f kk*

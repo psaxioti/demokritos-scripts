@@ -178,7 +178,11 @@ CalculateChi (){
             na ) csfiles=$(ls */rp*$(($ztar-2))*$(($mass-3))*.tot) ; beam=n ;;
          esac
          for csfile in ${csfiles[@]} ; do
-            chi_calc $csfile $TalysWorkDir/data/$mass$element/$expfile $mtar $beam >> chi2/$reaction-$expfile
+            if [ "$pc_type" == "cluster" ] ; then
+               echo "chi_calc $csfile $TalysWorkDir/data/$mass$element/$expfile $mtar $beam >> chi2/$reaction-$expfile" | qsub -cwd -V -j y -o $HOME -hold_jid $nuc_jobs
+            else
+               chi_calc $csfile $TalysWorkDir/data/$mass$element/$expfile $mtar $beam >> chi2/$reaction-$expfile
+            fi
          done
          unset csfiles
          unset beam
@@ -195,6 +199,25 @@ if [ ! $TalysWorkDir ] ; then
    if [ ! -d $TalysWorkDir ] ; then mkdir -p $TalysWorkDir ; fi
 fi
 cd $TalysWorkDir
+
+qstat >/dev/null 2>&1
+if [ "$?" == "0" ] ; then
+   batch_programm="qsub -cwd "
+   pc_type="cluster"
+   find_dir="$HOME"
+else
+   pgrep atd >/dev/null 2>&1
+   if [ "$?" == "0" ] ; then
+      batch_programm="batch < "
+      pc_type="pc"
+      find_dir="/usr/local"
+   else
+      echo "atd service is not running"
+      echo "Start the atd service and run the script again"
+      echo "To run the service contact your administrator"
+      echo "or run 'sudo service atd start' command"
+   fi
+fi
 
 if [ ! $1 ] ; then
    echo "Making SampleInput"
@@ -262,9 +285,10 @@ else
    tal_index=0
    for talysversion in ${talysv[@]} ; do
       tal_index=$(($tal_index + 1))
-      massesDir=$(find / -name "audi" 2>/dev/null | grep $(echo $talysversion | sed "s/\.//"))
+      massesDir=$(find $find_dir -name "audi" 2>/dev/null | grep $(echo $talysversion | sed "s/\.//"))
       nuc_index=0
       for nuc in ${nucleus[@]} ; do
+         nuc_jobs=""
          nuc_index=$(($nuc_index+1))
          mass=$(echo $nuc | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" ) #"
          element=$(echo $nuc | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/") #"
@@ -289,8 +313,14 @@ else
                                  cd $Talys_dir
                                  MakeInput
                                  echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}), combination $projectile-$alp$jlm$ldm$stre ($comp_index/$Ncompinations): Running talys               \r"
-                                 talys-$talysversion < input > output &
-                                 wait $!
+                                 if [ "$pc_type" == "cluster" ] ; then
+                                    cur_job=`echo "talys-$talysversion < input > output" | qsub -cwd -V -j y -o $HOME`
+                                    cur_job=$(echo $cur_job | cut -f3 -d' ')
+                                    nuc_jobs="$cur_job,$nuc_jobs"
+                                 else
+                                    talys-$talysversion < input > output &
+                                    wait $!
+                                 fi
                               fi
 			   fi
                            cd $TalysWorkDir
@@ -299,7 +329,11 @@ else
 			      cd $Talys_dir
 		              if [ -d ../ratio/$projectile-$alp$jlm$ldm$stre ] ; then rm -rf ../ratio/$projectile-$alp$jlm$ldm$stre ; fi
 			      mkdir -p ../ratio/$projectile-$alp$jlm$ldm$stre
-			      ratio "${ratio[0]}" "${ratio[1]}" >> ../ratio/$projectile-$alp$jlm$ldm$stre/ratioOut
+                              if [ "$pc_type" == "cluster" ] ; then
+                                 echo "ratio "${ratio[0]}" "${ratio[1]}" >> ../ratio/$projectile-$alp$jlm$ldm$stre/ratioOut" | qsub -cwd -V -j y -o $HOME -hold_jid $cur_job
+                              else
+			         ratio "${ratio[0]}" "${ratio[1]}" >> ../ratio/$projectile-$alp$jlm$ldm$stre/ratioOut
+                              fi
 			   fi
                            cd $TalysWorkDir
                         done
