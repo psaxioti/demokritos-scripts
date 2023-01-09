@@ -1,210 +1,256 @@
 #!/bin/bash
 
-Define_Dir () {
+#TalysWorkDir="/home/axiotis/Downloads/Talys_script_new/test"
+
+function Define_Dir {
    unset rr
    unset rrgs
    if [ "${ast}" == "y" ] ; then rr="-rr" ; fi
    if [ "${astgs}" == "y" ] ; then rrgs="gs" ; fi
-   case ${alp}${jlm}${ldm}${stre}${projectile} in
-#      1n11[pa] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys1$rr$rrgs ;;
-#      1y43p    ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys2$rr$rrgs ;;
-#      1y54p    ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys3$rr$rrgs ;;
-#      2n11[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys2$rr$rrgs ;;
-#      3y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys3$rr$rrgs ;;
-#      4y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys4$rr$rrgs ;;
-#      5y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys5$rr$rrgs ;;
-      *        ) Talys_dir=${InputWorkDir}/Talys-${talysversion}/${mass}${element}/${projectile}-${alp}${jlm}${ldm}${stre}${rr}${rrgs}
-   esac
+   TalysCalcDir=${InputWorkDir}/Talys-${talys_version}/${mass}${element}/${projectile}-${alpha_omp}${jlm_omp}${ld_model}${strength}
+   qsubLogFileName="talys-${talys_version}_${mass}${element}_${projectile}-${alpha_omp}${jlm_omp}${ld_model}${strength}"
+   if [ ${add_keywords} ] ; then
+      for (( i=0; i<${#add_keywords[@]}; i++ )) ; do
+         TalysCalcDir=${TalysCalcDir}-$(eval echo "\${${add_keywords[$i]}_line}" | sed "s/<.*>/${keywords_values[$i]}/" | sed "s/\ /_/g" | sed "s/adjust//g" | sed "s/_${projectile}//g")
+         qsubLogFileName="${qsubLogFileName}-$(eval echo "\${${add_keywords[$i]}_line}" | sed "s/<.*>/${keywords_values[$i]}/" | sed "s/\ /_/g" | sed "s/adjust//g" | sed "s/_${projectile}//g")"
+      done
+   fi
+   TalysCalcDir=${TalysCalcDir}${rr}${rrgs}
+   qsubLogFileName="${qsubLogFileName}${rr}${rrgs}"
 }
 
-MakeInput () {
-   echo -ne "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}), combination ${projectile}-${alp}${jlm}${ldm}${stre} (${comp_index}/${Ncompinations}): Making input file           \r"
-#   echo "Making input file for $mass$element for $projectile with $alp$jlm$ldm$stre astro $ast and astrogs $astgs"
+function MakeInput {
    echo "projectile ${projectile}" > input
    echo "element ${element}" >> input
    echo "mass ${mass}" >> input
    echo "energy energies" >> input
+   echo "alphaomp ${alpha_omp}" >> input
+   echo "jlmomp ${jlm_omp}" >> input
+   echo "ldmodel ${ld_model}" >> input
+   echo "strength ${strength}" >> input
+   if [ ${cbreak_p} ] ; then echo "Cbreak p ${cbreak_p}" >> input ; fi
+   if [ ${cbreak_n} ] ; then echo "Cbreak n ${cbreak_n}" >> input ; fi
    if [ ${transeps} ] ; then echo "transeps ${transeps}" >> input ; fi
    if [ ${popeps} ] ; then echo "popeps ${popeps}" >> input ; fi
-   echo "alphaomp ${alp}" >> input
-   echo "jlmomp ${jlm}" >> input
-   echo "ldmodel ${ldm}" >> input
-   echo "strength ${stre}" >> input
    if [ ${xseps} ] ; then echo "xseps ${xseps}" >> input ; fi
-   if [ ${cbreakp} ] ; then echo "Cbreak p ${cbreakp}" >> input ; fi
-   if [ ${cbreakn} ] ; then echo "Cbreak n ${cbreakn}" >> input ; fi
    if [ ${isomer} ] ; then echo "isomer ${isomer}" >> input ; fi
-   echo "relativistic n" >> input
-   echo "filechannels y" >> input
-   echo "channels y" >> input
    echo "astro ${ast}" >> input
    echo "astrogs ${astgs}" >> input
    if [ ${distflag} ] ; then echo "fileelastic ${distflag}" >> input ; echo "outangle ${distflag}" >> input ; fi
-}
-
-CalculateRatiosRanges () {
-   if [ -d Talys-${talysversion}/${mass}${element} ] ; then
-      echo -ne "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}): Calculating ratios ranges                                                                           \r"
-#      echo "Calculating ratios ranges for $mass$element"
-      for ratiodirectory in Talys-$talysversion/$mass$element/ratio_* ; do
-         cd ${InputWorkDir}/${ratiodirectory}
-         if [ -d Ranges ] ; then rm -rf Ranges ; fi
-         mkdir Ranges
-         projectiles=( p a n d )
-         for proj in ${projectiles[@]} ; do
-            rpfiles=$(ls ${proj}-*/ratioOut 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
-            for rpfile in ${rpfiles[@]} ; do
-               sed '/#/d' ${proj}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > Ranges/${proj}-ranges-${rpfile}
-               cp Ranges/${proj}-ranges-${rpfile} Ranges/kkranges-${rpfile}
-	       rm -f Ranges/${proj}-ranges-${rpfile}
-                  while read line ; do
-		     sorted=$(grep "^\ *${line} " ${proj}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g -u) #"
-                     min=$(echo ${sorted} | cut -f1 -d' ')
-                     max=$(echo ${sorted} | cut -f$(echo ${sorted} | wc -w) -d' ')
-                     minfiles=$(grep "${line}.*${min}" ${proj}-*/${rpfile} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' '| xargs -n1 | sort -u | xargs ) #"
-                     maxfiles=$(grep "${line}.*${max}" ${proj}-*/${rpfile} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' '| xargs -n1 | sort -u | xargs ) #"
-                     echo ${line} ${min} ${max} MINIMUM IN ${minfiles} MAXIMUM IN ${maxfiles} >>  Ranges/${proj}-ranges-${rpfile} 
-#		  echo $(grep "$line.*$min" $proj-*/$rpfile | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' | xargs -n1 | sort -u | xargs) >> ~/Desktop/testingkk             
-#		 sed -i "/^\ *$line/c\ $line $min $max MINIMUM IN $minfiles MAXIMUM IN $maxfiles" Ranges/$proj-ranges-$rpfile
-                  done < Ranges/kkranges-${rpfile}
-                  rm -f Ranges/kkranges-${rpfile}
-            done
-            unset rpfiles
-         done
+   echo "relativistic n" >> input
+   echo "filechannels y" >> input
+   echo "channels y" >> input
+   if [ ${add_keywords} ] ; then
+      for (( i=0; i<${#add_keywords[@]}; i++ )) ; do
+         eval echo "\${${add_keywords[$i]}_line}" | sed "s/<.*>/${keywords_values[$i]}/" >> input
       done
    fi
-   cd ${InputWorkDir}
 }
 
-CalculateRanges () {
-   if [ -d Talys-${talysversion}/${mass}${element} ] ; then
-      echo -ne "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}): Calculating ranges                                                                                  \r"
-#      echo "Calculating ranges for $mass$element"
-      cd Talys-${talysversion}/${mass}${element}
-      if [ -d Ranges ] ; then rm -rf Ranges ; fi
-      mkdir Ranges
-      projectiles=( p a n d )
-      for proj in ${projectiles[@]} ; do
-         rpfiles=$(ls ${proj}-*gs/astrorate.g 2>/dev/null)
-	 for rpfile in ${rpfiles[@]} ; do mv ${rpfile} ${rpfile}_gs ; done
-	 unset rpfiles
-         rpfiles=$(ls ${proj}-*/rp*.tot ${proj}-*/rp*.L0* ${proj}-*/astrorate.g* 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
-         for rpfile in ${rpfiles[@]} ; do
-            sed '/#/d' ${proj}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > Ranges/${proj}-ranges-${rpfile}
-            cp Ranges/${proj}-ranges-${rpfile} Ranges/kkranges-${rpfile}
-               while read line ; do
-		if [[ ${rpfile} == *"L0"* ]] ; then
-                  sorted=$(grep "^\ *${line}" ${proj}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
-		else
-		  sorted=$(grep "^\ *${line}" ${proj}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
-		fi
-                  min=$(echo ${sorted} | cut -f1 -d' ')
-                  max=$(echo ${sorted} | cut -f$(echo ${sorted} | wc -w) -d' ')
-                  minfiles=$(grep "${line}.*${min}" ${proj}-*/${rpfile} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
-                  maxfiles=$(grep "${line}.*${max}" ${proj}-*/${rpfile} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
-                  sed -i "/^\ *${line}/c\ ${line} ${min} ${max} MINIMUM IN ${minfiles} MAXIMUM IN ${maxfiles}" Ranges/${proj}-ranges-${rpfile}
-               done < Ranges/kkranges-${rpfile}
-               rm -f Ranges/kkranges-${rpfile}
-         done
-         unset rpfiles
+function CalculateRanges {
+   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
+      echo "Calculating ranges for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFileName}
+      if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/Ranges ] ; then
+         rm -rf ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/Ranges/${projectile}-ranges-*
+      else
+         mkdir -p ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/Ranges
+      fi
+      rrgsFiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/${projectile}-*rrgs/astrorate.* 2>/dev/null)
+      if [ ${rrgsFiles} ] ; then for rrgsFile in ${rrgsFiles[@]} ; do mv rrgsFile rrgsFile_gs ; done ; fi
+      unset rrgsFiles
+      cd ${InputWorkDir}/Talys-${talys_version}/${mass}${element}
+      rpfiles=$(ls ${projectile}-*/rp*.* ${projectile}-*/astrorate.* 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+      for rpfile in ${rpfiles[@]} ; do
+         sed '/#/d' ${projectile}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > Ranges/${projectile}-ranges-${rpfile}
+         cp Ranges/${projectile}-ranges-${rpfile} Ranges/kkranges-${rpfile}
+         while read line ; do
+            if [[ ${rpfile} == *"L0"* ]] ; then
+               sorted=$(grep "^\ *${line}" ${projectile}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+            else
+               sorted=$(grep "^\ *${line}" ${projectile}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+            fi
+            min=$(echo ${sorted} | cut -f1 -d' ')
+            max=$(echo ${sorted} | cut -f$(echo ${sorted} | wc -w) -d' ')
+            minfiles=$(grep "${line}.*${min}" ${projectile}-*/${rpfile} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+            maxfiles=$(grep "${line}.*${max}" ${projectile}-*/${rpfile} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+            sed -i "/^\ *${line}/c\ ${line} ${min} ${max} MINIMUM IN ${minfiles} MAXIMUM IN ${maxfiles}" Ranges/${projectile}-ranges-${rpfile}
+         done < Ranges/kkranges-${rpfile}
+         rm -f Ranges/kkranges-${rpfile}
       done
+      unset rpfiles
    fi
-   cd ${InputWorkDir}
 }
 
-CalculatePartialRanges () {
-   if [ -d Talys-${talysversion}/${mass}${element} ] ; then
-      echo -ne "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}): Calculating partial ranges                                                                          \r"
-#      echo "Calculating partial ranges for $mass$element"
-      cd Talys-${talysversion}/${mass}${element}
-      myparRanges=$(echo ${parRanges[@]} | sed "s/\ /\_/g")
-      if [ -d PartialRanges_${myparRanges} ] ; then rm -rf PartialRanges_${myparRanges} ; fi
-      mkdir PartialRanges_${myparRanges}
-      projectiles=( p a n d )
-      for proj in ${projectiles[@]} ; do
-         for parv in ${parRanges[@]} ; do
-            string=${string}"${proj}-${parv}/rp*.tot ${proj}-${parv}/rp*.L0* ${proj}-${parv}-rr/astrorate.g "
-         done
-         rpfiles=$(ls $(echo ${string} | sed "s/\+/\*/g") 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
-         kkrpfiles=$(ls $(echo ${string} | sed "s/\+/\*/g") 2>/dev/null | sort -u )
-#echo "string is ${string[@]}"
-#echo "rpfiles is ${rpfiles[@]}"
-#echo "kkrpfiles is ${kkrpfiles[@]}"
+function CalculateRatiosRanges {
+   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
+      echo "Calculating ranges of ratios for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFileName}
+      for ratioDir in ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/ratio_* ; do
+         if [ -d ${ratioDir}/Ranges ] ; then
+            rm -rf ${ratioDir}/Ranges/*
+         else
+            mkdir -p ${ratioDir}/Ranges
+         fi
+         cd ${ratioDir}
+         rpfiles=$(ls ${projectile}-*/ratioOut 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
          for rpfile in ${rpfiles[@]} ; do
-            sed '/#/d' $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > PartialRanges_${myparRanges}/${proj}-ranges-${rpfile}
-            cp PartialRanges_${myparRanges}/${proj}-ranges-${rpfile} PartialRanges_${myparRanges}/kkranges-${rpfile}
+            sed '/#/d' ${projectile}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > Ranges/kkranges-${rpfile}
             while read line ; do
-	     if [[ ${rpfile} == *"L0"* ]] ; then
-               sorted=$(grep "^\ *${line}" $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
-	     else
-               sorted=$(grep "^\ *${line}" $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
-	     fi
+               sorted=$(grep "^\ *${line} " ${projectile}-*/${rpfile} | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g -u) #"
                min=$(echo ${sorted} | cut -f1 -d' ')
                max=$(echo ${sorted} | cut -f$(echo ${sorted} | wc -w) -d' ')
-               minfiles=$(grep "${line}.*${min}" $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
-               maxfiles=$(grep "${line}.*${max}" $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
-               sed -i "/^\ *${line}/c\ ${line} ${min} ${max} MINIMUM IN ${minfiles} MAXIMUM IN ${maxfiles}" PartialRanges_${myparRanges}/${proj}-ranges-${rpfile}
-            done < PartialRanges_${myparRanges}/kkranges-${rpfile}
-#            rm -f PartialRanges_${myparRanges}/kkranges-${rpfile}
+               minfiles=$(grep "${line}.*${min}" ${projectile}-*/${rpfile} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' '| xargs -n1 | sort -u | xargs ) #"
+               maxfiles=$(grep "${line}.*${max}" ${projectile}-*/${rpfile} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' '| xargs -n1 | sort -u | xargs ) #"
+               echo ${line} ${min} ${max} MINIMUM IN ${minfiles} MAXIMUM IN ${maxfiles} >>  Ranges/${projectile}-ranges-${rpfile} 
+            done < Ranges/kkranges-${rpfile}
+            rm -f Ranges/kkranges-${rpfile}
          done
          unset rpfiles
-         unset string
       done
    fi
-   cd ${InputWorkDir}
 }
 
-CalculateChi (){
-   if [ -d Talys-${talysversion}/${mass}${element} ] ; then
-      echo -ne "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}): Calculating chi2                                                                                    \r"
-#      echo "Calculating chi2 for $mass$element"
-      cd Talys-${talysversion}/${mass}${element}
-      if [ -d chi2 ] ; then rm -rf chi2 ; fi
-      mkdir chi2
+function CalculatePartialRanges {
+   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
+      echo "Calculating partial ranges for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFileName}
+      myparRanges=$(echo ${partial_ranges[@]} | sed "s/\ /\_/g")
+      if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges} ] ; then
+         rm -rf ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/${projectile}-ranges-*
+      else
+         mkdir -p ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}
+      fi
+      for parv in ${partial_ranges[@]} ; do
+         string=${string}"${projectile}-${parv}/rp*.* ${projectile}-${parv}-rr/astrorate.* "
+      done
+      rpfiles=$(ls $(echo ${string} | sed "s/\+/\*/g") 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+      kkrpfiles=$(ls $(echo ${string} | sed "s/\+/\*/g") 2>/dev/null | sort -u )
+      for rpfile in ${rpfiles[@]} ; do
+         sed '/#/d' $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/${projectile}-ranges-${rpfile}
+         cp ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/${projectile}-ranges-${rpfile} ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/kkranges-${rpfile}
+         while read line ; do
+            if [[ ${rpfile} == *"L0"* ]] ; then
+               sorted=$(grep "^\ *${line}" $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+            else
+               sorted=$(grep "^\ *${line}" $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+            fi
+            min=$(echo ${sorted} | cut -f1 -d' ')
+            max=$(echo ${sorted} | cut -f$(echo ${sorted} | wc -w) -d' ')
+            minfiles=$(grep "${line}.*${min}" $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+            maxfiles=$(grep "${line}.*${max}" $(printf "${kkrpfiles}\n" | grep ${rpfile}) | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+            sed -i "/^\ *${line}/c\ ${line} ${min} ${max} MINIMUM IN ${minfiles} MAXIMUM IN ${maxfiles}" ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/${projectile}-ranges-${rpfile}
+         done < ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/kkranges-${rpfile}
+         rm -f ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/kkranges-${rpfile}
+      done
+      unset rpfiles
+      unset string
+   fi
+}
+
+function CalculateChi {
+   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
+      echo "Calculating chi2 for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFileName}
+      if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2 ] ; then
+         rm -rf ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/*
+      else
+         mkdir -p ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2
+      fi
       expfiles=$(ls ${TalysWorkDir}/data/${mass}${element}/* 2>/dev/null | sed "s/.*\/.*${element}\/\(.*\)/\1/g") #"
       ztar=$(grep ${mass}${element} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
       mtar=$(grep ${mass}${element} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
       for expfile in ${expfiles[@]} ; do
-         reaction=$(echo ${expfile} | sed "s/.*\_\(.*\)\_.*/\1/g") #"
+         reaction=$(echo ${expfile} | sed "s/.*\_\([pan][gnpa]\)\_.*/\1/g") #"
+	 expfilestate=$(echo ${expfile} | grep -oh [Lt][o0-9][t0-9])
          case ${reaction} in
-            pg ) csfiles=$(ls */rp*$(($ztar+1))*$(($mass+1))*.tot) ; beam=p ;;
-            pn ) csfiles=$(ls */rp*$(($ztar+1))*$(($mass+0))*.tot) ; beam=p ;;
-            pp ) csfiles=$(ls */rp*$(($ztar+0))*$(($mass+0))*.tot) ; beam=p ;;
-            pa ) csfiles=$(ls */rp*$(($ztar-1))*$(($mass-3))*.tot) ; beam=p ;;
-            ag ) csfiles=$(ls */rp*$(($ztar+2))*$(($mass+4))*.tot) ; beam=a ;;
-            an ) csfiles=$(ls */rp*$(($ztar+2))*$(($mass+3))*.tot) ; beam=a ;;
-            ap ) csfiles=$(ls */rp*$(($ztar+1))*$(($mass+3))*.tot) ; beam=a ;;
-            aa ) csfiles=$(ls */rp*$(($ztar+0))*$(($mass+0))*.tot) ; beam=a ;;
-            ng ) csfiles=$(ls */rp*$(($ztar+0))*$(($mass+1))*.tot) ; beam=n ;;
-            nn ) csfiles=$(ls */rp*$(($ztar+0))*$(($mass+0))*.tot) ; beam=n ;;
-            np ) csfiles=$(ls */rp*$(($ztar-1))*$(($mass+0))*.tot) ; beam=n ;;
-            na ) csfiles=$(ls */rp*$(($ztar-2))*$(($mass-3))*.tot) ; beam=n ;;
+            pg ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+1))*.${expfilestate} 2>/dev/null) ; beam=p ;;
+            pn ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=p ;;
+            pp ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=p ;;
+            pa ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-1))*$(($mass-3))*.${expfilestate} 2>/dev/null) ; beam=p ;;
+            ag ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+2))*$(($mass+4))*.${expfilestate} 2>/dev/null) ; beam=a ;;
+            an ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+2))*$(($mass+3))*.${expfilestate} 2>/dev/null) ; beam=a ;;
+            ap ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+3))*.${expfilestate} 2>/dev/null) ; beam=a ;;
+            aa ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=a ;;
+            ng ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+1))*.${expfilestate} 2>/dev/null) ; beam=n ;;
+            nn ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=n ;;
+            np ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-1))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=n ;;
+            na ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-2))*$(($mass-3))*.${expfilestate} 2>/dev/null) ; beam=n ;;
          esac
          for csfile in ${csfiles[@]} ; do
             if [ "${pc_type}" == "cluster" ] ; then
-               echo "chi_calc ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> chi2/${reaction}-${expfile}" | qsub -cwd -V -j y -o $HOME
+               echo "chi_calc_new ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile} ; rm -f ${LogDir}/chi2-${expfile}*" | qsub -cwd -V -j y -o ${LogDir} -N chi2-${expfile}
             else
-               chi_calc ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> chi2/${reaction}-${expfile}
+               chi_calc_new ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile}
             fi
          done
          unset csfiles
          unset beam
       done
-      unset rpfiles
+      unset expfiles
    fi
-   cd ${InputWorkDir}
+}
+
+function iterate_on_additional_keywords {
+   local index="$2"
+   if [ "${index}" == "${#add_keywords[@]}" ] ; then
+      Define_Dir
+      if [ "${talys_flag}" == "y" ] ; then
+         if [ ! -d ${TalysCalcDir} ] ; then mkdir -p ${TalysCalcDir} ; fi
+         calc_ener=0
+         if [ -e ${TalysCalcDir}/total.tot ] ; then calc_ener=$(( $(wc -l ${Talys_dir}/total.tot | cut -f1 -d' ') - $(grep "^#" ${Talys_dir}/total.tot | wc -l)  )) ; fi
+         diff ${InputWorkDir}/energies.$$ ${Talys_dir}/energies >/dev/null 2>&1
+         if [ "$?" -gt "0" -o "$(wc -l ${InputWorkDir}/energies.$$ | cut -f1 -d' ')" -ne "${calc_ener}" ] ; then
+            echo "Running talys in folder ${TalysCalcDir}" >> ${LogFileName}
+            if [ ${TalysCalcDir} ] && [ -d ${TalysCalcDir} ] ; then
+               rm -rf ${TalysCalcDir}/*
+               cp ${InputWorkDir}/energies.$$ ${TalysCalcDir}/energies
+               cd ${TalysCalcDir}
+               MakeInput
+               if [ "${pc_type}" == "cluster" ] ; then
+                  echo "talys-${talys_version} < input > output ; rm ${LogDir}/${qsubLogFileName}.o*" | qsub -cwd -V -j y -o ${LogDir} -N ${qsubLogFileName}
+               else
+                  talys-${talys_version} < input > output &
+                  wait $!
+               fi
+            fi
+         fi
+      fi
+      if [ ${ratio} ] && [ -d ${TalysCalcDir} ] ; then
+         echo "Calculating ratios for folder ${TalysCalcDir}" >> ${LogFileName}
+         for enum in ${ratio_values[0]} ; do
+            for denom in ${ratio_values[1]} ; do
+               RatioCalcDir=$(echo ${TalysCalcDir} | sed "s/${mass}${element}\/${projectile}/${mass}${element}\/ratio_${enum}_over_${denom}\/${projectile}/")
+               if [ -d ${RatioCalcDir} ] ; then rm -rf ${RatioCalcDir} ; fi
+               mkdir -p ${RatioCalcDir}
+               if [ "${pc_type}" == "cluster" ] ; then
+                  echo "ratio "${enum}" "${denom}" >> ${RatioCalcDir}/ratioOut ; rm -f ${LogDir}/ratio-${qsubLogFileName}.o*" | qsub -cwd -V -j y -o ${LogDir} -hold_jid ${qsubLogFileName} -N ratio-${qsubLogFileName}
+               else
+                  ratio "${enum}" "${denom}" >> ${RatioCalcDir}/ratioOut
+               fi
+            done
+         done
+      fi
+      echo "Finished running talys in folder ${TalysCalcDir}" >> ${LogFileName}
+   else
+      for dumelement in $(eval echo "\${${add_keywords[${index}]}_values[@]}") ; do
+         keywords_values["${index}"]="${dumelement}"
+         local it=$((index+1))
+         iterate_on_additional_keywords keywords_values[@] "$it"
+      done
+   fi
 }
 
 CurWorkDir=`pwd`
+
 if [ ! ${TalysWorkDir} ] ; then
    echo "TalysWorkDir is not defined."
    read -p "Give folder for Talys calculations and data " TalysWorkDir
+   if [ ! ${TalysWorkDir} ] ; then echo -e "You haven't given any input!!!\nExiting!!!\nRun Again the Program!!!" ; exit 10 ; fi
    echo "Setting ${TalysWorkDir} as TalysWorkDir in bashrc"
    echo "export TalysWorkDir=${TalysWorkDir}" >> ~/.bashrc
 fi
 
-if [ ! -d ${TalysWorkDir} ] ; then mkdir -p ${TalysWorkDir} ; mkdir -p ${TalysWorkDir}/data ; mkdir -p ${TalysWorkDir}/inputs ; fi
-cd ${TalysWorkDir}
+if [ ! -d ${TalysWorkDir} ] ; then mkdir -p ${TalysWorkDir} ; fi
+if [ ! -d ${TalysWorkDir}/data ] ; then mkdir -p ${TalysWorkDir}/data ; fi
+if [ ! -d ${TalysWorkDir}/inputs ] ; then mkdir -p ${TalysWorkDir}/inputs ; fi
+if [ ! -d ${TalysWorkDir} ] ; then echo -e "Directory ${TalysWorkDir} doesn't exist and could not be created!!!\nExiting!!!" ; exit 11 ; fi
 
 qstat >/dev/null 2>&1
 if [ "$?" == "0" ] ; then
@@ -219,192 +265,213 @@ fi
 
 if [ ! $1 ] ; then
    echo "Making SampleInput in folder ${TalysWorkDir}/inputs"
-   if [ ! -d ${TalysWorkDir}/inputs ] ; then mkdir -p ${TalysWorkDir}/inputs ; fi
-   cd ${TalysWorkDir}/inputs
-   echo "Give Talys Versions (can be more than one, default 1.9) : 1.9" >> SampleInput
-   echo "Give Nuclei (In either form 78Se Se78) (can be more than one) : Se78" >> SampleInput
-   echo "Give projectile (can be n p a) (ONLY ONE) : p" >> SampleInput
-   echo "Give alphaomps (1-8) (can be more than one, default 1) : 1 2" >> SampleInput
-   echo "jlmomp y/n (can be more than one, default n) : y n" >> SampleInput
-   echo "Give ldmodels (1-6) (can be more than one, default 1) : 1" >> SampleInput
-   echo "Give strengths (1-8) (can be more than one, default 2) : 1" >> SampleInput
-   echo "Give energy Limits (MeV) : 0 11" >> SampleInput
-   echo "Give energy step (MeV) : .05" >> SampleInput
-   echo "Give Cbreak p (optional) : " >> SampleInput
-   echo "Give Cbreak n (optional) : " >> SampleInput
-   echo "Give transeps (optional) : " >> SampleInput
-   echo "Give popeps (optional) : " >> SampleInput
-   echo "Give xseps (optional) : " >> SampleInput
-   echo "Give isomer (optional) : " >> SampleInput
-   echo "Calculate elastic angular distributions (y/n, ONLY ONE) (optional, default n) : " >> SampleInput
-   echo "astro y/n (can be more than one) (optional, default n) : n" >> SampleInput
-   echo "astrogs y/n (can be more than one) (optional, default n) : n" >> SampleInput
-   echo "Run Talys y/n : n" >> SampleInput
-   echo "Calculate Ranges y/n : n" >> SampleInput
-   echo "Calculate Chi y/n : n" >> SampleInput 
-   echo "Calculate Partial Ranges (optional) : 1n++ +y+4" >> SampleInput
-   echo "Calculate ratio (numerators / denominators) (both can be more than one): rp035080.L00 / rp035080.tot" >> SampleInput
-   chmod 444 SampleInput
-   cd ${TalysWorkDir}
+   cat > ${TalysWorkDir}/inputs/SampleInput <<_EOF_
+################################################################################
+#####  Configuration section                                               #####
+################################################################################
+Give Talys Versions (can be more than one, default 1.95) : 1.95
+Run Talys y/n : n
+Calculate Ranges y/n : n
+Calculate Chi y/n : n
+Calculate Partial Ranges (optional) : 1n++ +y+4
+Calculate ratio (numerators / denominators) (both can be more than one): rp035080.L00 / rp035080.tot
+Calculate elastic angular distributions (y/n, ONLY ONE) (optional, default n) : 
+
+################################################################################
+#####  Basic configuration of input file                                   #####
+################################################################################
+Give Nuclei (In either form 78Se Se78) (can be more than one) : Se78
+Give projectile (can be more than one of n p d t h a g, default p) : p
+Give alphaomps (1-8) (can be more than one, default 1) : 1 2
+jlmomp y/n (can be more than one, default n) : y n
+Give ldmodels (1-6) (can be more than one, default 1) : 1
+Give strengths (1-8) (can be more than one, default 2) : 1
+Give energy range and step (in MeV, it has to be <Min> <Max> <step>) : 0 11 .05
+Give Cbreak p (optional, ONLY ONE) : 
+Give Cbreak n (optional, ONLY ONE) : 
+Give transeps (optional, ONLY ONE) : 
+Give popeps (optional, ONLY ONE) : 
+Give xseps (optional, ONLY ONE) : 
+Give isomer (optional, ONLY ONE) : 
+astro y/n (can be more than one) (optional, default n) : n
+astrogs y/n (can be more than one) (optional, default n) : n
+
+################################################################################
+#####  Additional keywords to be added to the input file                   #####
+#####  The following three formats are recognized                          #####
+#####  1. keyword p1 p2 ...                                                #####
+#####  2. keyword p1 <p2_value1 p2_value2 p2_value3 ...> p3 p4 ...         #####
+#####  3. keyword p1 p2 <range p3Min p3Max p3step> p4 ...                  #####
+#####  where pi is the ith parameter needed for the additional keyword     #####
+################################################################################
+##### Beginning of additional keywords
+
+##### End of additional keywords
+_EOF_
+   chmod 444 ${TalysWorkDir}/inputs/SampleInput
 else
-   if [ ! -s ${CurWorkDir}/$1 ] ; then echo "File $1 does not exist or is empty." ; echo "Please check the filename provided and run again" ; exit 1 ; fi
+   if [ ! -s ${CurWorkDir}/$1 ] ; then echo "File $1 does not exist or is empty." ; echo "Please check the filename provided and run again" ; exit 12 ; fi
    InputFileName=`echo "$1" | sed "s/.*\///"`
    InputWorkDir=${TalysWorkDir}/${InputFileName}
    if [ ! -d ${InputWorkDir} ] ; then mkdir -p ${InputWorkDir} ; fi
-   cp ${CurWorkDir}/$1 ${InputWorkDir}/
+   if [ ! -d ${InputWorkDir} ] ; then echo -e "Directory ${InputWorkDir} doesn't exist and could not be created!!!\nExiting!!!" ; exit 13 ; fi
+   cp -f ${CurWorkDir}/$1 ${InputWorkDir}/
    LogDir=${InputWorkDir}/logs
    if [ ! -d ${LogDir} ] ; then mkdir -p ${LogDir} ; fi
+   if [ ! -d ${LogDir} ] ; then echo -e "Directory ${LogDir} doesn't exist and could not be created!!!\nExiting!!!" ; exit 14 ; fi
    LogFileName=${LogDir}/${InputFileName}.log
+   echo -e "\n################################################################################" >> ${LogFileName}
+   echo "Running Talys-script for input ${InputFileName}" >> ${LogFileName}
 
-   cd ${InputWorkDir}
-   IFS=' ' read -a talysv     <<< $(grep -i "Give.*Talys.*Versions"      ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a nucleus    <<< $(grep -i "Give.*Nuclei"               ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a projectile <<< $(grep -i "Give.*projectile"           ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a alphaomp   <<< $(grep -i "Give.*alphaomps"            ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a jlmomp     <<< $(grep -i "jlmomp.*y\/n"               ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a ldmodel    <<< $(grep -i "Give.*ldmodels"             ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a strength   <<< $(grep -i "Give.*strengths"            ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a energy     <<< $(grep -i "Give.*energy.*Limits"       ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a energystp  <<< $(grep -i "Give.*energy.*step"         ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a cbreakp    <<< $(grep -i "Give.*Cbreak.*p"            ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a cbreakn    <<< $(grep -i "Give.*Cbreak.*n"            ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a transeps   <<< $(grep -i "Give.*transeps"             ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a popeps     <<< $(grep -i "Give.*popeps"               ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a xseps      <<< $(grep -i "Give.*xseps"                ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a astro      <<< $(grep -i "astro[^g].*y\/n"            ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a astrogs    <<< $(grep -i "astrogs.*y\/n"              ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a talysflag  <<< $(grep -i "Run.*Talys.*y\/n"           ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a rangesflag <<< $(grep -i "Calculate.*Ranges.*y\/n"    ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a chiflag    <<< $(grep -i "Calculate.*chi.*y\/n"       ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a parRanges  <<< $(grep -i "Calculate.*Partial.*Ranges" ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a ratio      <<< $(grep -i "Calculate.*ratio"           ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS='/' read -a ratiov     <<< ${ratio[@]}
-   IFS=' ' read -a isomer     <<< $(grep -i "Give.*isomer"               ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a distflag   <<< $(grep -i "Calculate.*elastic.*angula" ${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   
-   if [ ! ${talysv} ] ; then talysv=1.9 ; fi
-   if [ ! ${nucleus} ] ; then echo "Please input at least one nucleus" ; exit 1 ; fi
-   if [ ! ${projectile} ] ; then echo "Please input the projectile" ; exit 1 ; fi
-   if [ ! ${alphaomp} ] ; then alphaomp=1 ; fi
-   if [ ! ${jlmomp} ] ; then jlmomp=n ; fi
-   if [ ! ${ldmodel} ] ; then ldmodel=1 ; fi
-   if [ ! ${strength} ] ; then strength=2 ; fi
-   if [ ! ${astro} ] ; then astro=n ; fi
-   if [ ! ${astrogs} ] ; then astrogs=n ; fi
+   echo "Reading input file ${InputWorkDir}/${InputFileName}." >> ${LogFileName}
+   IFS=' ' read -a talys_versions  <<< $(grep -i "Give.*Talys.*Versions"           ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a talys_flag      <<< $(grep -i "Run.*Talys.*y\/n"                ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a ranges_flag     <<< $(grep -i "Calculate.*Ranges.*y\/n"         ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a chi_flag        <<< $(grep -i "Calculate.*chi.*y\/n"            ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a partial_ranges  <<< $(grep -i "Calculate.*Partial.*Ranges"      ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a ratio           <<< $(grep -i "Calculate.*ratio"                ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS='/' read -a ratio_values    <<< ${ratio[@]}
+   IFS=' ' read -a distflag        <<< $(grep -i "Calculate.*elastic.*angula"      ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+
+   IFS=' ' read -a nuclei          <<< $(grep -i "Give.*Nuclei"                    ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a projectiles     <<< $(grep -i "Give.*projectile"                ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a alpha_omps      <<< $(grep -i "Give.*alphaomps"                 ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a jlm_omps        <<< $(grep -i "jlmomp.*y\/n"                    ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a ld_models       <<< $(grep -i "Give.*ldmodels"                  ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a strengths       <<< $(grep -i "Give.*strengths"                 ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a energy_range    <<< $(grep -i "Give.*energy.*range.*and.*step"  ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a energy          <<< $(grep -i "Give.*energy.*Limits"            ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a energystp       <<< $(grep -i "Give.*energy.*step"              ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a cbreak_p        <<< $(grep -i "Give.*Cbreak.*p"                 ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a cbreak_n        <<< $(grep -i "Give.*Cbreak.*n"                 ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a transeps        <<< $(grep -i "Give.*transeps"                  ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a popeps          <<< $(grep -i "Give.*popeps"                    ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a xseps           <<< $(grep -i "Give.*xseps"                     ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a isomer          <<< $(grep -i "Give.*isomer"                    ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a astro           <<< $(grep -i "astro[^g].*y\/n"                 ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a astrogs         <<< $(grep -i "astrogs.*y\/n"                   ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+
+   add_keywords=($(sed -n "/#.*Beginning/,/#.*End/p" ${InputWorkDir}/${InputFileName} | sed "/^#/d" | cut -f1 -d' '))
+
+   if [ ! ${talys_versions} ] ; then talys_versions=1.95 ; fi
+   if [ ${ratio} ] && [ ! ${#ratio_values[@]} -eq 2 ] ; then 
+      echo "warning: The ratio values in the input file are not correct and will be discarded!!!"
+      echo "warning: The ratio values in the input file are not correct and will be discarded!!!" >> ${LogFileName}
+      unset ratio_values
+      unset ratio
+   fi
    if [ ! ${distflag} ] ; then distflag=n ; fi
 
-   Ncompinations=$(( ${#alphaomp[@]} * ${#jlmomp[@]} * ${#ldmodel[@]} * ${#strength[@]} * ${#astro[@]} * ${#astrogs[@]} ))
-
-   if [ "${talysflag[0]}" == "y" ] ; then
-      if [ -e energies.$$ ] ; then rm -f energies.$$ ; fi
-      kkener=${energy[0]}
-      while (( $(echo "${kkener}<=${energy[1]}" | bc -l) )) ; do
-         if (( $(echo "${kkener}>0" | bc -l) )) ; then echo ${kkener} >> ./energies.$$ ; fi
-         kkener=$(echo "${kkener}+${energystp}" | bc -l)
-      done
-      unset kkener
-   fi
-   
-   echo "Running Talys-script for input ${InputFileName}" > ${LogFileName}
-   tal_index=0
-   for talysversion in ${talysv[@]} ; do
-      tal_index=$(($tal_index + 1))
-      massesDir=$(find ${find_dir} -name "audi" 2>/dev/null | grep $(echo ${talysversion} | sed "s/\.//"))
-      nuc_index=0
-      for nuc in ${nucleus[@]} ; do
-         nuc_jobs=""
-         nuc_index=$((${nuc_index}+1))
-         mass=$(echo ${nuc} | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" ) #"
-         element=$(echo ${nuc} | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/") #"
-         comp_index=0
-         for alp in ${alphaomp[@]} ; do
-            for jlm in ${jlmomp[@]} ; do
-               for ldm in ${ldmodel[@]} ; do
-                  for stre in ${strength[@]} ; do
-                     for ast in ${astro[@]} ; do
-                        for astgs in ${astrogs[@]} ; do
-                           comp_index=$(($comp_index+1))
-			   Define_Dir
-   			   if [ "${talysflag[0]}" == "y" ] ; then
-                              echo -ne "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}), combination ${projectile}-${alp}${jlm}${ldm}${stre} (${comp_index}/${Ncompinations}): Initializing                \r"
-                              if [ ! -d ${Talys_dir} ] ; then mkdir -p ${Talys_dir} ; fi
-                              calc_ener=0
-                              if [ -e ${Talys_dir}/total.tot ] ; then calc_ener=$(( $(wc -l ${Talys_dir}/total.tot | cut -f1 -d' ') - $(grep "^#" ${Talys_dir}/total.tot | wc -l)  )) ; fi
-                              diff energies.$$ ${Talys_dir}/energies >/dev/null 2>&1
-                              if [ "$?" -gt "0" -o "$(wc -l energies.$$ | cut -f1 -d' ')" -ne "${calc_ener}" ] ; then
-                                 rm -rf ${Talys_dir}/*
-                                 cp energies.$$ ${Talys_dir}/energies
-                                 cd ${Talys_dir}
-                                 MakeInput
-                                 echo -ne "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}), combination ${projectile}-${alp}${jlm}${ldm}${stre} (${comp_index}/${Ncompinations}): Running talys               \r"
-                                 if [ "${pc_type}" == "cluster" ] ; then
-                                    echo "talys-${talysversion} < input > output ; rm ${LogDir}/talys-${mass}${element}_${projectile}-${alp}${jlm}${ldm}${stre}.o*" | qsub -cwd -V -j y -o ${LogDir} -N talys-${mass}${element}_${projectile}-${alp}${jlm}${ldm}${stre}
-#                                    cur_job=`echo "talys-$talysversion < input > output" | qsub -cwd -V -j y -o $HOME`
-#                                    cur_job=$(echo $cur_job | cut -f3 -d' ')
-#                                    nuc_jobs="$cur_job,$nuc_jobs"
-                                 else
-                                    talys-${talysversion} < input > output &
-                                    wait $!
-                                 fi
-                              fi
-#			   else
-#                              if [ "$pc_type" == "cluster" ] ; then qsub -N talys-${mass}${element}_${projectile}-${alp}${jlm}${ldm}${stre} {ls} ; fi
-                           fi
-                           cd ${InputWorkDir}
-			   if [ ${ratio} ] && [ -d ${Talys_dir} ] ; then
-			      cd ${Talys_dir}
-                              for enum in ${ratiov[0]} ; do
-                                 for denom in ${ratiov[1]} ; do
-		                    if [ -d ../ratio_${enum}_over_${denom}/${projectile}-${alp}${jlm}${ldm}${stre} ] ; then rm -rf ../ratio_${enum}_over_${denom}/${projectile}-${alp}${jlm}${ldm}${stre} ; fi
-                                    mkdir -p ../ratio_${enum}_over_${denom}/${projectile}-${alp}${jlm}${ldm}${stre}
-                                    if [ "${pc_type}" == "cluster" ] ; then
-                                       echo "ratio "${enum}" "${denom}" >> ../ratio_${enum}_over_${denom}/${projectile}-${alp}${jlm}${ldm}${stre}/ratioOut ; rm ${LogDir}/ratio-${mass}${element}_${projectile}-${alp}${jlm}${ldm}${stre}.o*" | qsub -cwd -V -j y -o ${LogDir} -hold_jid talys-${mass}${element}_${projectile}-${alp}${jlm}${ldm}${stre} -N ratio-${mass}${element}_${projectile}-${alp}${jlm}${ldm}${stre}
-                                    else
-			               ratio "${enum}" "${denom}" >> ../ratio_${enum}_over_${denom}/${projectile}-${alp}${jlm}${ldm}${stre}/ratioOut
-                                    fi
-                                 done
-                              done
-			   fi
-                           cd ${InputWorkDir}
-                        done
-                        echo -ne "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}), combination ${projectile}-${alp}${jlm}${ldm}${stre} (${comp_index}/${Ncompinations}): Finished running            \r"
-                        echo "Running talys ${talysversion} (${tal_index}/${#talysv[@]}), nucleus ${mass}${element} (${nuc_index}/${#nucleus[@]}), combination ${projectile}-${alp}${jlm}${ldm}${stre} (${comp_index}/${Ncompinations}): Finished running" >> ${LogFileName}
-                     done
-                  done
-               done
-            done
+   if [ ! ${nuclei} ] ; then echo "error: Please input at least one nucleus" ; echo "error: Please input at least one nucleus" >> ${LogFileName} ; exit 15 ; fi
+   if [ ! ${projectiles} ] ; then echo "error: Please input at least one projectile" ; echo "error: Please input at least one projectile" >> ${LogFileName} ; exit 16 ; fi
+   if [ ! ${alpha_omps} ] ; then alpha_omps=1 ; fi
+   if [ ! ${jlm_omps} ] ; then jlm_omps=n ; fi
+   if [ ! ${ld_models} ] ; then ld_models=1 ; fi
+   if [ ! ${strengths} ] ; then strengths=2 ; fi
+   if [ "${talys_flag}" == "y" ] ; then
+      if [ -e ${InputWorkDir}/energies.$$ ] ; then rm -f ${InputWorkDir}/energies.$$ ; fi
+      if [ ${energy_range} ] || [ ${energy} ] ; then
+         if [ ${energy_range} ] ; then kkenermin=${energy_range[0]} ; else kkenermin=${energy[0]} ; fi
+         if [ ${energy_range} ] ; then kkenermax=${energy_range[1]} ; else kkenermax=${energy[1]} ; fi
+         if [ ${energy_range} ] ; then kkenerstp=${energy_range[2]} ; else kkenerstp=${energystp} ; fi
+         kkener=${kkenermin}
+         while (( $(echo "${kkener}<=${kkenermax}" | bc -l) )) ; do
+            if (( $(echo "${kkener}>0" | bc -l) )) ; then echo ${kkener} >> ${InputWorkDir}/energies.$$ ; fi
+            kkener=$(echo "${kkener}+${kkenerstp}" | bc -l)
          done
-         if [ "${rangesflag[0]}" == "y" ] ; then 
-            if [ "${pc_type}" == "cluster" ] ; then
-               while true ; do if qstat -j "talys-${mass}${element}_${projectile}*" 2> /dev/null | grep talys-${mass}${element}_${projectile} &> /dev/null ; then sleep 10s ; else CalculateRanges ; break ; fi ; done &
-            else
-               CalculateRanges
-            fi
+         unset kkenermin
+         unset kkenermax
+         unset kkenerstp
+         unset kkener
+      else
+         echo "error: You asked to run Talys but you have not given the energy range for the calculation!!!"
+         echo "error: You asked to run Talys but you have not given the energy range for the calculation!!!" >> ${LogFileName}
+         exit 17
+      fi
+   fi
+   if [ ! ${astro} ] ; then astro=n ; fi
+   if [ ! ${astrogs} ] ; then astrogs=n ; fi
+
+   for keyword in ${add_keywords[@]} ; do
+      eval "${keyword}_line=\"`grep ${keyword} ${InputWorkDir}/${InputFileName} 2>/dev/null`\""
+      if ((eval echo "\${${keyword}_line}") | grep "<" 2>/dev/null) ; then
+         declare -a "${keyword}_values"
+         eval "${keyword}_values"="($(eval echo "\${${keyword}_line}" | sed "s/.*<\(.*\)>.*/\1/"))"
+         if [ "$(eval echo "\${${keyword}_values[0]}")" == "range" ] ; then
+            eval kkmin=\${${keyword}_values[1]}
+            eval kkmax=\${${keyword}_values[2]}
+            eval kkstp=\${${keyword}_values[3]}
+            unset ${keyword}_values
+            declare -a "${keyword}_values"
+            eval "${keyword}_values"+="($(echo ${kkmin}))"
+            while (( $(echo "${kkmin}<${kkmax}" | bc -l) )) ; do
+               eval "${keyword}_values"+="($(echo "${kkmin}+${kkstp}" | bc -l))"
+               kkmin=$(echo "${kkmin}+${kkstp}" | bc -l)
+            done
+            unset kkmin
+            unset kkmax
+            unset kkstp
          fi
-         if [ ${ratio} ] ; then
-            if [ "${pc_type}" == "cluster" ] ; then
-               while true ; do if qstat -j "ratio-${mass}${element}_${projectile}*" 2> /dev/null | grep ratio-${mass}${element}_${projectile} &> /dev/null ; then sleep 10s ; else CalculateRatiosRanges ; break ; fi ; done &
-            else
-               CalculateRatiosRanges
-            fi
-         fi
-         if [ ${parRanges} ] ; then
-            if [ "${pc_type}" == "cluster" ] ; then
-               while true ; do if qstat -j "talys-${mass}${element}_${projectile}*" 2> /dev/null | grep talys-${mass}${element}_${projectile} &> /dev/null ; then sleep 10s ; else CalculatePartialRanges ; break ; fi ; done &
-            else
-               CalculatePartialRanges
-            fi
-         fi
-         if [ "${chiflag[0]}" == "y" ] ; then
-            if [ "${pc_type}" == "cluster" ] ; then
-               while true ; do if qstat -j "talys-${mass}${element}_${projectile}*" 2> /dev/null | grep talys-${mass}${element}_${projectile} &> /dev/null ; then sleep 10s ; else CalculateChi ; break ; fi ; done &
-            else
-               CalculateChi
-            fi
-         fi
-      done
+      else
+         eval "${keyword}_values"="("kk")"
+      fi
    done
-   if [ "${talysflag[0]}" == "y" ] ; then if [ -e energies.$$ ] ; then rm -f energies.$$ ; fi ; fi
+   
+   for talys_version in ${talys_versions[@]} ; do
+      massesDir=$(find ${find_dir} -name "audi" 2>/dev/null | grep $(echo ${talys_version} | sed "s/\.//"))
+      for nucleus in ${nuclei[@]} ; do
+         mass=$(echo ${nucleus} | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" ) #"
+         element=$(echo ${nucleus} | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/") #"
+         for projectile in ${projectiles[@]} ; do
+            for alpha_omp in ${alpha_omps[@]} ; do
+               for jlm_omp in ${jlm_omps[@]} ; do
+                  for ld_model in ${ld_models[@]} ; do
+                     for strength in ${strengths[@]} ; do
+                        for ast in ${astro[@]} ; do
+                           for astgs in ${astrogs[@]} ; do
+                              if [ ! "${ast}" == "y" ] && [ "${astgs}" == "y" ] ; then break ; fi
+                              declare -a keywords_values
+                              iterate_on_additional_keywords "" 0
+                              unset keywords_values
+#   Finishing do on astrogs
+                           done
+#   Finishing do on astro
+                        done
+#   Finishing do on strengths
+                     done
+#   Finishing do on ld_models
+                  done
+#   Finishing do on jlm_omps
+               done
+#   Finishing do on alpha_omps
+            done
+            qsubPrefix="talys-${talys_version}_${mass}${element}_${projectile}"
+            if [ "${pc_type}" == "cluster" ] ; then
+               while true ; do
+                  if qstat -j "${qsubPrefix}*" 2> /dev/null | grep ${qsubPrefix} &> /dev/null ; then
+                     sleep 10s
+                  else
+                     if [ "${ranges_flag}" == "y" ] ; then CalculateRanges ; fi
+                     if [ ${ratio} ] ; then CalculateRatiosRanges ; fi
+                     if [ ${partial_ranges} ] ; then CalculatePartialRanges ; fi
+                     if [ "${chi_flag}" == "y" ] ; then CalculateChi ; fi
+                     break
+                  fi
+               done &
+            else
+               if [ "${ranges_flag}" == "y" ] ; then CalculateRanges ; fi
+               if [ ${ratio} ] ; then CalculateRatiosRanges ; fi
+               if [ ${partial_ranges} ] ; then CalculatePartialRanges ; fi
+               if [ "${chi_flag}" == "y" ] ; then CalculateChi ; fi
+            fi
+#   Finishing do on projectiles
+         done
+#   Finishing do on nuclei
+      done
+#   Finishing do on talys_versions
+   done
+
+   if [ "${talys_flag}" == "y" ] && [ -e ${InputWorkDir}/energies.$$ ] ; then rm -f ${InputWorkDir}/energies.$$ ; fi
 fi
-echo -ne "\nFinished!\n"
+
 exit 0
