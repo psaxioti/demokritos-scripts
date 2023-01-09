@@ -33,6 +33,7 @@ MakeInput () {
    if [ $xseps ] ; then echo "xseps $xseps" >> input ; fi
    if [ $cbreakp ] ; then echo "Cbreak p $cbreakp" >> input ; fi
    if [ $cbreakn ] ; then echo "Cbreak n $cbreakn" >> input ; fi
+   if [ $isomer ] ; then echo "isomer $isomer" >> input ; fi
    echo "relativistic n" >> input
    echo "filechannels y" >> input
    echo "channels y" >> input
@@ -179,7 +180,7 @@ CalculateChi (){
          esac
          for csfile in ${csfiles[@]} ; do
             if [ "$pc_type" == "cluster" ] ; then
-               echo "chi_calc $csfile $TalysWorkDir/data/$mass$element/$expfile $mtar $beam >> chi2/$reaction-$expfile" | qsub -cwd -V -j y -o $HOME -hold_jid $nuc_jobs
+               echo "chi_calc $csfile $TalysWorkDir/data/$mass$element/$expfile $mtar $beam >> chi2/$reaction-$expfile" | qsub -cwd -V -j y -o $HOME
             else
                chi_calc $csfile $TalysWorkDir/data/$mass$element/$expfile $mtar $beam >> chi2/$reaction-$expfile
             fi
@@ -206,17 +207,9 @@ if [ "$?" == "0" ] ; then
    pc_type="cluster"
    find_dir="$HOME"
 else
-   pgrep atd >/dev/null 2>&1
-   if [ "$?" == "0" ] ; then
-      batch_programm="batch < "
-      pc_type="pc"
-      find_dir="/usr/local"
-   else
-      echo "atd service is not running"
-      echo "Start the atd service and run the script again"
-      echo "To run the service contact your administrator"
-      echo "or run 'sudo service atd start' command"
-   fi
+   batch_programm="batch < "
+   pc_type="pc"
+   find_dir="/usr/local"
 fi
 
 if [ ! $1 ] ; then
@@ -235,13 +228,15 @@ if [ ! $1 ] ; then
    echo "Give transeps (optional) : " >> SampleInput
    echo "Give popeps (optional) : " >> SampleInput
    echo "Give xseps (optional) : " >> SampleInput
+   echo "Give isomer (optional) : " >> SampleInput
    echo "astro y/n (can be more than one) (optional, default n) : n" >> SampleInput
    echo "astrogs y/n (can be more than one) (optional, default n) : n" >> SampleInput
    echo "Run Talys y/n : n" >> SampleInput
    echo "Calculate Ranges y/n : n" >> SampleInput
    echo "Calculate Chi y/n : n" >> SampleInput 
    echo "Calculate Partial Ranges (optional) : 1n++ +y+4" >> SampleInput
-   echo "Calculate ratio (first over second): rp035080.L00 rp035080.tot" >> SampleInput  
+   echo "Calculate ratio (first over second): rp035080.L00 rp035080.tot" >> SampleInput
+   chmod 444 SampleInput
 else
    IFS=' ' read -a talysv     <<< $(grep -i "Give.*Talys.*Versions"      $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a nucleus    <<< $(grep -i "Give.*Nuclei"               $1 | sed "s/.*:\(.*\)/\1/") #"
@@ -257,13 +252,14 @@ else
    IFS=' ' read -a transeps   <<< $(grep -i "Give.*transeps"             $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a popeps     <<< $(grep -i "Give.*popeps"               $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a xseps      <<< $(grep -i "Give.*xseps"                $1 | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a astro      <<< $(grep -i "astro[^g].*y\/n"            $1 | sed "s/.*:\(.*\)/\1/") #"   
-   IFS=' ' read -a astrogs    <<< $(grep -i "astrogs.*y\/n"              $1 | sed "s/.*:\(.*\)/\1/") #" 
+   IFS=' ' read -a astro      <<< $(grep -i "astro[^g].*y\/n"            $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a astrogs    <<< $(grep -i "astrogs.*y\/n"              $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a talysflag  <<< $(grep -i "Run.*Talys.*y\/n"           $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a rangesflag <<< $(grep -i "Calculate.*Ranges.*y\/n"    $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a chiflag    <<< $(grep -i "Calculate.*chi.*y\/n"       $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a parRanges  <<< $(grep -i "Calculate.*Partial.*Ranges" $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a ratio      <<< $(grep -i "Calculate.*ratio"           $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a isomer     <<< $(grep -i "Give.*isomer"               $1 | sed "s/.*:\(.*\)/\1/") #"
    
    if [ ! $talysv ] ; then talysv=1.8 ; fi
    if [ ! $astro ] ; then astro=n ; fi

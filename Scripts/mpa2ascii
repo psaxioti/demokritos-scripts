@@ -60,18 +60,18 @@ function mpa_to_ascii
             continue
          fi
          if [ ${dtc} ] ; then
-            realtime=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/realtime/p" | sed "s/.*=\(.*\)/\1/")     #"
-            livetime=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/livetime/p" | sed "s/.*=\(.*\)/\1/")     #"
+            realtime=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/realtime/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
+            livetime=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/livetime/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
             factor=`bc -l <<< ${realtime}/${livetime}`
             if [ ${verbose} ] ; then echo "For adc ${ADC} of file ${file} we have realtime: ${realtime}, and livetime: ${livetime}." ; fi
             if [ ${verbose} ] ; then echo "For adc ${ADC} of file ${file} the factor that will be used for deadtime correction is: ${factor}." ; fi
          fi
          if [ ${use_calibration} ] ; then
             unset cal
-            cal[0]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/caloff/p" | sed "s/.*=\(.*\)/\1/")     #"
-            cal[1]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact=/p" | sed "s/.*=\(.*\)/\1/")     #"
-            cal[2]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact2/p" | sed "s/.*=\(.*\)/\1/")     #"
-            cal[3]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact3/p" | sed "s/.*=\(.*\)/\1/")     #"
+            cal[0]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/caloff/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
+            cal[1]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact=/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
+            cal[2]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact2/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
+            cal[3]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact3/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
             if [ ${verbose} ] ; then echo "For adc ${ADC} of file ${file} we will use the following coefficients for calibration:" ; fi
             if [ ${verbose} ] ; then echo "Offset: ${cal[0]}" ; fi
             if [ ${verbose} ] ; then echo "Linear: ${cal[1]}" ; fi

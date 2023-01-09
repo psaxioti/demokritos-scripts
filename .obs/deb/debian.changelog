@@ -1,3 +1,9 @@
+demokritos-scripts (0.6-0) stable; urgency=low
+
+  * Updated versions of mpa2ascii and Talys_script scripts
+
+ -- Axiotis Michail <psaxioti@gmail.com>  Mon, 09 Jan 2023 16:52:57 +0200
+
 demokritos-scripts (0.5-0) stable; urgency=low
 
   * Updated versions of mpa2ascii, qt_install and Talys_script scripts
