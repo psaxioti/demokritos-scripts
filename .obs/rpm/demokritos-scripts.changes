@@ -1,4 +1,9 @@
 -------------------------------------------------------------------
+Mon Jan  9 16:29:21 UTC 2023 - Michail Axiotis <psaxioti@gmail.com>
+
+- Removed qt_install, now in package qt-cross-compile
+
+-------------------------------------------------------------------
 Mon Jan  9 14:52:05 UTC 2023 - Michail Axiotis <psaxioti@gmail.com>
 
 - Updated versions of mpa2ascii and Talys_script scripts

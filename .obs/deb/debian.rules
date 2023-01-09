@@ -60,7 +60,6 @@ install-arch: build-arch
 	install -Dm755 Scripts/geant_make   $(inst_path)/geant_make
 	install -Dm755 Scripts/mpa2ascii   $(inst_path)/mpa2ascii
 	install -Dm755 Scripts/mpa2gupix   $(inst_path)/mpa2gupix
-	install -Dm755 Scripts/qt_install   $(inst_path)/qt_install
 	install -Dm755 Scripts/spe2ascii   $(inst_path)/spe2ascii
 	install -Dm755 Scripts/stut2ascii   $(inst_path)/stut2ascii
 	install -Dm755 Scripts/Talys_script   $(inst_path)/Talys_script

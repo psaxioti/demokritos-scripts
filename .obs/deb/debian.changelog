@@ -1,3 +1,9 @@
+demokritos-scripts (0.7-0) stable; urgency=low
+
+  * Removed qt_install
+
+ -- Axiotis Michail <psaxioti@gmail.com>  Mon, 09 Jan 2023 18:27:23 +0200
+
 demokritos-scripts (0.6-0) stable; urgency=low
 
   * Updated versions of mpa2ascii and Talys_script scripts
