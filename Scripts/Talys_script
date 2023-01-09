@@ -39,6 +39,7 @@ MakeInput () {
    echo "channels y" >> input
    echo "astro $ast" >> input
    echo "astrogs $astgs" >> input
+   if [ $distflag ] ; then echo "fileelastic $distflag" >> input ; echo "outangle $distflag" >> input ; fi
 }
 
 CalculateRatiosRanges () {
@@ -217,10 +218,10 @@ if [ ! $1 ] ; then
    echo "Give Talys Versions (can be more than one) : 1.8" >> SampleInput
    echo "Give Nuclei (In either form 78Se Se78) (can be more than one) : Se78" >> SampleInput
    echo "Give projectile (can be n p a) (ONLY ONE) : p" >> SampleInput
-   echo "Give alphaomps (1-5) (can be more than one) : 1 2" >> SampleInput
+   echo "Give alphaomps (1-8) (can be more than one) : 1 2" >> SampleInput
    echo "jlmomp y/n (can be more than one) : y n" >> SampleInput
    echo "Give ldmodels (1-6) (can be more than one) : 1" >> SampleInput
-   echo "Give strengths (1-5) (can be more than one) : 1" >> SampleInput
+   echo "Give strengths (1-8) (can be more than one) : 1" >> SampleInput
    echo "Give energy Limits (MeV) : 0 11" >> SampleInput
    echo "Give energy step (MeV) : .05" >> SampleInput
    echo "Give Cbreak p (optional) : " >> SampleInput
@@ -229,6 +230,7 @@ if [ ! $1 ] ; then
    echo "Give popeps (optional) : " >> SampleInput
    echo "Give xseps (optional) : " >> SampleInput
    echo "Give isomer (optional) : " >> SampleInput
+   echo "Calculate elastic angular distributions (y/n) : " >> SampleInput
    echo "astro y/n (can be more than one) (optional, default n) : n" >> SampleInput
    echo "astrogs y/n (can be more than one) (optional, default n) : n" >> SampleInput
    echo "Run Talys y/n : n" >> SampleInput
@@ -260,10 +262,18 @@ else
    IFS=' ' read -a parRanges  <<< $(grep -i "Calculate.*Partial.*Ranges" $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a ratio      <<< $(grep -i "Calculate.*ratio"           $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a isomer     <<< $(grep -i "Give.*isomer"               $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a distflag   <<< $(grep -i "Calculate.*elastic.*angula" $1 | sed "s/.*:\(.*\)/\1/") #"
    
    if [ ! $talysv ] ; then talysv=1.8 ; fi
+   if [ ! $nucleus ] ; then echo "Please input at least one nucleus" ; exit 1 ; fi
+   if [ ! $projectile ] ; then echo "Please input the projectile" ; exit 1 ; fi
+   if [ ! $alphaomp ] ; then alphaomp=1 ; fi
+   if [ ! $jlmomp ] ; then jlmomp=n ; fi
+   if [ ! $ldmodel ] ; then ldmodel=1 ; fi
+   if [ ! $strength ] ; then strength=2 ; fi
    if [ ! $astro ] ; then astro=n ; fi
    if [ ! $astrogs ] ; then astrogs=n ; fi
+   if [ ! $distflag ] ; then distflag=n ; fi
 
    Ncompinations=$(( ${#alphaomp[@]} * ${#jlmomp[@]} * ${#ldmodel[@]} * ${#strength[@]} * ${#astro[@]} * ${#astrogs[@]} ))
 
