@@ -1,5 +1,25 @@
 #!/bin/bash
 
+base_path=`pwd`
+tmp_dir="mygeant4_build"
+bin_dir="bin"
+
+usage="
+Usage: `basename $0` [OPTION]... [FOLDER]
+Compile a Geant4 project and create an executable using cmake.
+In case a CMakeLists.txt file is missing a generic one will be created.
+The script will configure and compile the project in folder ${tmp_dir} in the project's folder.
+The executable will be installed in folder ${bin_dir} in the project's folder.
+
+By default the project is assumed to be in the current folder.
+If the user provides a [FOLDER], it will be used as a base directory.
+
+  -h, --help              display this help and exit
+  -c, --clean             by default the build folder will not by deleted, in order
+                          to speedup compilation.
+                          With this flag the build folder will be deleted
+"
+
 function make_cmakelist
 {
    echo -e "set(projName ${filename%.*})" > CMakeLists.txt
@@ -65,15 +85,54 @@ function make_cmakelist
    echo -e 'install(TARGETS ${projName} DESTINATION bin)' >> CMakeLists.txt
 }
 
-for filename in *.cc ; do
-   rm -rf tmp
-   if [ ! -f CMakeLists.txt ] ; then
-      $(make_cmakelist)
-   fi
-   mkdir tmp
-   cd tmp
-   cmake -DGeant4_DIR=$G4LIB -DCMAKE_INSTALL_PREFIX=../ ../
-   make install -j2
-   cd ../
-   rm -rf tmp
+for arg in "$@" ; do
+   case $1 in
+      -c|--clean)
+         clean_tmp_path=1
+         shift
+      ;;
+      -h|--help)
+         echo "$usage"
+         exit 0
+      ;;
+      -*|--*)
+         echo "Unknown option."
+         echo "Type `basename $0` -h or --help for usage"
+         exit 1
+      ;;
+      *)
+         base_path=("$arg")
+         shift
+      ;;
+   esac
 done
+
+if [ ! -d ${base_path} ] ; then echo -e "Folder ${base_path} does not exist!\nPlease give a valid folder!" ; exit 2 ; fi
+cd ${base_path}
+
+no_files_with_main=`grep main *.cc 2>/dev/null | wc -l`
+if [ ${no_files_with_main} -eq 0 ] ; then echo -e "Folder ${base_path} doesn't contain a .cc file with main." ; exit 3 ; fi
+if [ ${no_files_with_main} -gt 1 ] ; then echo -e "Folder ${base_path} contains more than one .cc files with main!" ; exit 4 ; fi
+
+filename=`grep -l main *.cc 2>/dev/null`
+
+if [ ${clean_tmp_path} ] ; then rm -rf ${tmp_dir} ; fi
+if [ ! -f CMakeLists.txt ] ; then
+   $(make_cmakelist)
+fi
+if [ ! -d ${tmp_dir} ] ; then mkdir ${tmp_dir} ; fi
+cd ${tmp_dir}
+cmake -DCMAKE_INSTALL_PREFIX=../ ../
+make install -j2
+cd ../
+if [ ${clean_tmp_path} ] ; then rm -rf ${tmp_dir} ; fi
+
+unset base_path
+unset tmp_dir
+unset bin_dir
+unset usage
+unset clean_tmp_path
+unset no_files_with_main
+unset filename
+
+exit 0

@@ -6,19 +6,20 @@ Define_Dir () {
    if [ "$ast" == "y" ] ; then rr="-rr" ; fi
    if [ "$astgs" == "y" ] ; then rrgs="gs" ; fi
    case $alp$jlm$ldm$stre$projectile in
-      1n11[pa] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys1$rr$rrgs ;;
-      1y43p    ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys2$rr$rrgs ;;
-      1y54p    ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys3$rr$rrgs ;;
-      2n11[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys2$rr$rrgs ;;
-      3y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys3$rr$rrgs ;;
-      4y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys4$rr$rrgs ;;
-      5y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys5$rr$rrgs ;;
+#      1n11[pa] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys1$rr$rrgs ;;
+#      1y43p    ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys2$rr$rrgs ;;
+#      1y54p    ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys3$rr$rrgs ;;
+#      2n11[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys2$rr$rrgs ;;
+#      3y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys3$rr$rrgs ;;
+#      4y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys4$rr$rrgs ;;
+#      5y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys5$rr$rrgs ;;
       *        ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-$alp$jlm$ldm$stre$rr$rrgs
    esac
 }
 
 MakeInput () {
-   echo "Making input file for $mass$element for $projectile with $alp$jlm$ldm$stre astro $ast and astrogs $astgs"
+   echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}), combination $projectile-$alp$jlm$ldm$stre ($comp_index/$Ncompinations): Making input file           \r"
+#   echo "Making input file for $mass$element for $projectile with $alp$jlm$ldm$stre astro $ast and astrogs $astgs"
    echo "projectile $projectile" > input
    echo "element $element" >> input
    echo "mass $mass" >> input
@@ -33,15 +34,16 @@ MakeInput () {
    if [ $cbreakp ] ; then echo "Cbreak p $cbreakp" >> input ; fi
    if [ $cbreakn ] ; then echo "Cbreak n $cbreakn" >> input ; fi
    echo "relativistic n" >> input
-  echo "filechannels y" >> input
-  echo "channels y" >> input
+   echo "filechannels y" >> input
+   echo "channels y" >> input
    echo "astro $ast" >> input
    echo "astrogs $astgs" >> input
 }
 
 CalculateRatiosRanges () {
    if [ -d Talys-$talysversion/$mass$element ] ; then
-      echo "Calculating ratios ranges for $mass$element"
+      echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}): Calculating ratios ranges                                                                           \r"
+#      echo "Calculating ratios ranges for $mass$element"
       cd Talys-$talysversion/$mass$element/ratio
       if [ -d Ranges ] ; then rm -rf Ranges ; fi
       mkdir Ranges
@@ -72,7 +74,8 @@ CalculateRatiosRanges () {
 
 CalculateRanges () {
    if [ -d Talys-$talysversion/$mass$element ] ; then
-      echo "Calculating ranges for $mass$element"
+      echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}): Calculating ranges                                                                                  \r"
+#      echo "Calculating ranges for $mass$element"
       cd Talys-$talysversion/$mass$element
       if [ -d Ranges ] ; then rm -rf Ranges ; fi
       mkdir Ranges
@@ -104,7 +107,8 @@ CalculateRanges () {
 
 CalculatePartialRanges () {
    if [ -d Talys-$talysversion/$mass$element ] ; then
-      echo "Calculating partial ranges for $mass$element"
+      echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}): Calculating partial ranges                                                                          \r"
+#      echo "Calculating partial ranges for $mass$element"
       cd Talys-$talysversion/$mass$element
       if [ -d PartialRanges ] ; then rm -rf PartialRanges ; fi
       mkdir PartialRanges
@@ -124,9 +128,6 @@ CalculatePartialRanges () {
          kkrpfiles=$(ls $(echo $string | sed "s/\+/\*/g") 2>/dev/null | sort -u )
 
          for rpfile in ${rpfiles[@]} ; do
-#echo $rpfile
-#printf "$kkrpfiles\n" | grep $rpfile
-#printf "$kkrpfiles\n" | grep $rpfile
             sed '/#/d' $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > PartialRanges/$proj-ranges-$rpfile
             cp PartialRanges/$proj-ranges-$rpfile PartialRanges/kkranges-$rpfile
             while read line ; do
@@ -152,13 +153,14 @@ CalculatePartialRanges () {
 
 CalculateChi (){
    if [ -d Talys-$talysversion/$mass$element ] ; then
-      echo "Calculating chi2 for $mass$element"
+      echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}): Calculating chi2                                                                                    \r"
+#      echo "Calculating chi2 for $mass$element"
       cd Talys-$talysversion/$mass$element
       if [ -d chi2 ] ; then rm -rf chi2 ; fi
       mkdir chi2
       expfiles=$(ls $TalysWorkDir/data/$mass$element/* 2>/dev/null | sed "s/.*\/.*$element\/\(.*\)/\1/g") #"
-      ztar=$(grep $mass$element /usr/local/share/talys/talys$(echo $talysversion | sed "s/\.//")/structure/masses/audi/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
-      mtar=$(grep $mass$element /usr/local/share/talys/talys$(echo $talysversion | sed "s/\.//")/structure/masses/audi/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
+      ztar=$(grep $mass$element $massesDir/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
+      mtar=$(grep $mass$element $massesDir/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
       for expfile in ${expfiles[@]} ; do
          reaction=$(echo $expfile | sed "s/.*\_\(.*\)\_.*/\1/g") #"
          case $reaction in
@@ -196,7 +198,7 @@ cd $TalysWorkDir
 
 if [ ! $1 ] ; then
    echo "Making SampleInput"
-   echo "Give Talys Versions (can be more than one) : 1.4" >> SampleInput
+   echo "Give Talys Versions (can be more than one) : 1.8" >> SampleInput
    echo "Give Nuclei (In either form 78Se Se78) (can be more than one) : Se78" >> SampleInput
    echo "Give projectile (can be n p a) (ONLY ONE) : p" >> SampleInput
    echo "Give alphaomps (1-5) (can be more than one) : 1 2" >> SampleInput
@@ -240,64 +242,81 @@ else
    IFS=' ' read -a parRanges  <<< $(grep -i "Calculate.*Partial.*Ranges" $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a ratio      <<< $(grep -i "Calculate.*ratio"           $1 | sed "s/.*:\(.*\)/\1/") #"
    
-if [ ! $talysv ] ; then talysv=1.8 ; fi
-if [ ! $astro ] ; then astro=n ; fi
-if [ ! $astrogs ] ; then astrogs=n ; fi
+   if [ ! $talysv ] ; then talysv=1.8 ; fi
+   if [ ! $astro ] ; then astro=n ; fi
+   if [ ! $astrogs ] ; then astrogs=n ; fi
+
+   Ncompinations=$(( ${#alphaomp[@]} * ${#jlmomp[@]} * ${#ldmodel[@]} * ${#strength[@]} * ${#astro[@]} * ${#astrogs[@]} ))
 
    if [ "${talysflag[0]}" == "y" ] ; then
-      if [ -e energies ] ; then rm -f energies ; fi
+      if [ -e energies.$$ ] ; then rm -f energies.$$ ; fi
       kkener=${energy[0]}
       while (( $(echo "$kkener<=${energy[1]}" | bc -l) )) ; do
-         if (( $(echo "$kkener>0" | bc -l) )) ; then echo $kkener >> ./energies ; fi
+         if (( $(echo "$kkener>0" | bc -l) )) ; then echo $kkener >> ./energies.$$ ; fi
          kkener=$(echo "$kkener+$energystp" | bc -l)
       done
       unset kkener
    fi
    
+   echo "Running Talys-script for input $1" > Talys_script.log.$$
+   tal_index=0
    for talysversion in ${talysv[@]} ; do
+      tal_index=$(($tal_index + 1))
+      massesDir=$(find / -name "audi" 2>/dev/null | grep $(echo $talysversion | sed "s/\.//"))
+      nuc_index=0
       for nuc in ${nucleus[@]} ; do
+         nuc_index=$(($nuc_index+1))
          mass=$(echo $nuc | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" ) #"
          element=$(echo $nuc | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/") #"
-         echo "$mass$element"
+         comp_index=0
          for alp in ${alphaomp[@]} ; do
             for jlm in ${jlmomp[@]} ; do
                for ldm in ${ldmodel[@]} ; do
                   for stre in ${strength[@]} ; do
                      for ast in ${astro[@]} ; do
                         for astgs in ${astrogs[@]} ; do
-   			  if [ "${talysflag[0]}" == "y" ] ; then 
-			     Define_Dir
-                             if [ -d $Talys_dir ] ; then rm -rf $Talys_dir ; fi
-                             mkdir -p $Talys_dir
-                             cp energies $Talys_dir
-                             cd $Talys_dir
-                             echo "$(pwd)"
-                             MakeInput
-                             echo "Running Talys"
-                             time talys-$talysversion < input > output
-			  fi
+                           comp_index=$(($comp_index+1))
+   			   if [ "${talysflag[0]}" == "y" ] ; then
+                              echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}), combination $projectile-$alp$jlm$ldm$stre ($comp_index/$Ncompinations): Initializing                \r"
+			      Define_Dir
+                              if [ ! -d $Talys_dir ] ; then mkdir -p $Talys_dir ; fi
+                              calc_ener=0
+                              if [ -e $Talys_dir/total.tot ] ; then calc_ener=$(( $(wc -l $Talys_dir/total.tot | cut -f1 -d' ') - $(grep "^#" $Talys_dir/total.tot | wc -l)  )) ; fi
+                              diff energies.$$ $Talys_dir/energies >/dev/null 2>&1
+                              if [ "$?" -gt "0" -o "$(wc -l energies.$$ | cut -f1 -d' ')" -ne "$calc_ener" ] ; then
+                                 rm -rf $Talys_dir/*
+                                 cp energies.$$ $Talys_dir/energies
+                                 cd $Talys_dir
+                                 MakeInput
+                                 echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}), combination $projectile-$alp$jlm$ldm$stre ($comp_index/$Ncompinations): Running talys               \r"
+                                 talys-$talysversion < input > output &
+                                 wait $!
+                              fi
+			   fi
                            cd $TalysWorkDir
-			if [ $ratio ] ; then
-			  Define_Dir
-			  cd $Talys_dir
-		        if [ -d ../ratio/$projectile-$alp$jlm$ldm$stre ] ; then rm -rf ../ratio/$projectile-$alp$jlm$ldm$stre ; fi
-			  mkdir -p ../ratio/$projectile-$alp$jlm$ldm$stre
-			  ratio "${ratio[0]}" "${ratio[1]}" >> ../ratio/$projectile-$alp$jlm$ldm$stre/ratioOut
-			fi
+			   if [ $ratio ] ; then
+			      Define_Dir
+			      cd $Talys_dir
+		              if [ -d ../ratio/$projectile-$alp$jlm$ldm$stre ] ; then rm -rf ../ratio/$projectile-$alp$jlm$ldm$stre ; fi
+			      mkdir -p ../ratio/$projectile-$alp$jlm$ldm$stre
+			      ratio "${ratio[0]}" "${ratio[1]}" >> ../ratio/$projectile-$alp$jlm$ldm$stre/ratioOut
+			   fi
                            cd $TalysWorkDir
                         done
+                        echo -ne "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}), combination $projectile-$alp$jlm$ldm$stre ($comp_index/$Ncompinations): Finished running            \r"
+                        echo "Running talys $talysversion ($tal_index/${#talysv[@]}), nucleus $mass$element ($nuc_index/${#nucleus[@]}), combination $projectile-$alp$jlm$ldm$stre ($comp_index/$Ncompinations): Finished running" >> Talys_script.log.$$
                      done
                   done
                done
             done
          done
-   if [ "${rangesflag[0]}" == "y" ] ; then time CalculateRanges ; fi
-   if [ $ratio ] ; then time CalculateRatiosRanges ; fi
-   if [ $parRanges ] ; then time CalculatePartialRanges ; fi
-   if [ "${chiflag[0]}" == "y" ] ; then time CalculateChi ; fi
+         if [ "${rangesflag[0]}" == "y" ] ; then CalculateRanges ; fi
+         if [ $ratio ] ; then CalculateRatiosRanges ; fi
+         if [ $parRanges ] ; then CalculatePartialRanges ; fi
+         if [ "${chiflag[0]}" == "y" ] ; then CalculateChi ; fi
       done
    done
 fi
-#if [ "${talysflag[0]}" == "y" ] ; then if [ -e energies ] ; then rm -f energies ; fi ; fi
-echo "Finished!"
+if [ "${talysflag[0]}" == "y" ] ; then if [ -e energies.$$ ] ; then rm -f energies.$$ ; fi ; fi
+echo -ne "\nFinished!\n"
 exit 0

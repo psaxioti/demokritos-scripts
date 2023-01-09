@@ -3,32 +3,57 @@
 appname=$(pwd | sed "s/.*\/\(.*\)/\1/")                                  #"
 
 usage="
-Usage: `basename $0` [OPTION]
+Usage: `basename $0` [OPTION] \"...\"
 Compile a Qt program for different platforms.
 If no options are given the script will detect the platform and
 compile the program with the latest Qt version installed.
+
+Additional flags to be passed at the qmake -project command can
+be given in quotes.
+The default flags to be passed are:
+For all the systems
+   \"QT += core gui\" \"greaterThan(QT_MAJOR_VERSION, 4): QT += widgets\"
+Additionaly for Windows and linux systems with qt5
+   \"DEPENDPATH += . include src\" \"INCLUDEPATH += . include\"
+
 After compilation the directory will be cleaned.
 
   -h, --help                    display this help and exit
-  -win                          cross-compile code for windows OS
-                                the mingw cross-compilers have to be already installed
-  -qt4                          for opensuse Os that has both Qt4 and Qt5 installed it
-                                will compile using the Qt4 libraries
-  -d, --debug                   it will keep the pro file
+  -win, -win64                  cross-compile code for windows 64bit OS
+                                the mingw cross-compilers have to be already
+                                installed
+  -win32                        cross-compile code for windows 32bit OS
+                                the mingw cross-compilers have to be already
+                                installed
+  -qt4                          for opensuse OS that has both Qt4 and Qt5
+                                installed, it will compile using the Qt4
+                                libraries
+  -d, --debug                   it will keep the project file (.pro) and the
+                                Makefiles
 "
 
 for arg in "$@" ; do
-   case $1 in
+   case "$1" in
       -h|--help)
          echo "$usage"
          exit 0
       ;;
-      -win)
+      -win|-win64)
          windows="1"
+         windows64="1"
+         shift
+      ;;
+      -win32)
+         windows="1"
+         windows32="1"
          shift
       ;;
       -qt4)
          qt4="1"
+         shift
+      ;;
+      *)
+         qt_flags+=("$1")
          shift
       ;;
       -d|--debug)
@@ -67,13 +92,31 @@ if [[ "$OS" == "mac" ]]
 elif [[ "$OS" == "linux" ]]
    then
    if [[ "$windows" == "1" ]]
-      then 
-      if hash mingw64-qmake-qt5 2>/dev/null
+      then
+      if [[ "$windows64" == "1" ]]
          then
-         program=mingw64-qmake-qt5
-      else
-         echo "mingw64-qmake-qt5 is not installed"
-         exit 2 
+         if hash mingw64-qmake-qt5 2>/dev/null
+            then
+            program=mingw64-qmake-qt5
+            dllfolder="/usr/x86_64-w64-mingw32/sys-root/mingw/bin"
+            winfolder=Win64_$appname
+            qt_flags+=("DEPENDPATH += . include src" "INCLUDEPATH += . include")
+         else
+            echo "mingw64-qmake-qt5 is not installed"
+            exit 2 
+         fi
+      elif [[ "$windows32" == "1" ]]
+         then
+         if hash mingw32-qmake-qt5 2>/dev/null
+            then
+            program=mingw32-qmake-qt5
+            dllfolder="/usr/i686-w64-mingw32/sys-root/mingw/bin/"
+            winfolder=Win32_$appname
+            qt_flags+=("DEPENDPATH += . include src" "INCLUDEPATH += . include")
+         else
+            echo "mingw32-qmake-qt5 is not installed"
+            exit 2 
+         fi
       fi
    else
       if [[ "$qt4" == "1" ]]
@@ -100,14 +143,20 @@ elif [[ "$OS" == "linux" ]]
 fi
 
 qt_version=$($program -v | grep "Qt\ version" | sed "s/.\+Qt\ version\ \([0-9.]\+\).\+/\1/")                                                  #"
+if [ -f $appname\_Qt_$qt_version ] ; then rm -rf $appname\_Qt_$qt_version ; fi
+if [ -d $winfolder ] ; then rm -rf $winfolder ; fi
+if [ -d debug ] ; then rm -rf debug ; fi
+if [ -d release ] ; then rm -rf release ; fi
 $program -project "${qt_flags[@]}"
 $program
 make
+makeresult="$?"
+if [[ "$makeresult" != "0" ]] ; then echo "" ; echo "!!!!!!!!!!!!!!!!!!!!!" ; echo "An error occured while compiling." ; echo "Exiting without removing any files." ; exit 2 ; fi
 make clean
-rm -rf Makefile*
 if [[ "$debug" != "1" ]]
    then
    rm -rf $appname.pro
+   rm -rf Makefile*
 fi
 
 if [ -f $appname ]
@@ -117,21 +166,24 @@ fi
 
 if [[ "$windows" == "1" ]]
    then
-   mkdir Win_$appname
-   mv release/*.exe ./Win_$appname/
+   mkdir $winfolder
+   mv release/*.exe ./$winfolder
    rm -rf debug release
    if hash wine 2>/dev/null
       then
+      cp -r $dllfolder/../lib/qt5/plugins/platforms $winfolder
       until [ $PID ]
          do
-         wine Win_$appname/$appname.exe 2>kk &
+         wine $winfolder/$appname.exe 2>kk &
          sleep 5s
          PID=$(pgrep $appname)
-         if [ $PID ]
+         if [ -n "$PID" ]
             then
-            kill -9 $PID
+            kill -9 $PID 2>kk &
             sleep 5s
-            rm -f kk*
+            rm -f kk* object_script.*
+#            make_msi
+#            if [ -f $appname.msi ] ; then if [[ "$windows32" == "1" ]] ; then mv $appname.msi $appname\_32bit.msi ; else mv $appname.msi $appname\_64bit.msi ; fi ;fi
             exit 0
          else
             grep ".dll" kk | cut -d" " -f3 > kk1
@@ -139,7 +191,7 @@ if [[ "$windows" == "1" ]]
             IFS=$'\n' read -a dlls <<< $(cat kk)
             for dll in ${dlls[@]}
                do
-               if [ ! -f Win_$appname/$dll ] ; then cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/$dll Win_$appname/ ; fi
+               if [ ! -f $winfolder/$dll ] ; then cp $dllfolder/$dll $winfolder/ ; fi
             done
          fi
          rm -f kk*
