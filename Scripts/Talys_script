@@ -117,13 +117,13 @@ CalculatePartialRanges () {
       for proj in ${projectiles[@]} ; do
          for parv in ${parRanges[@]} ; do
             string=$string"$proj-$parv/rp*.tot $proj-$parv/rp*.L00 $proj-$parv/rp*.L01 $proj-$parv/rp*.L02 $proj-$parv/astrorate.g "
-            if [[ $parv$proj == [1\+][n\+][1\+][1\+][pa] ]] ; then string=$string"$proj-Talys1/rp*.tot $proj-Talys1/rp*.L00 $proj-Talys1/rp*.L01 $proj-Talys1/rp*.L02 $proj-Talys1/astrorate.g " ; fi
-            if [[ $parv$proj == [1\+][y\+][4\+][3\+]p ]]    ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/rp*.L00 $proj-Talys2/rp*.L01 $proj-Talys2/rp*.L02 $proj-Talys2/astrorate.g " ; fi
-            if [[ $parv$proj == [1\+][y\+][5\+][4\+]p ]]    ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/rp*.L00 $proj-Talys3/rp*.L01 $proj-Talys3/rp*.L02 $proj-Talys3/astrorate.g " ; fi
-            if [[ $parv$proj == [2\+][n\+][1\+][1\+][^p] ]] ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/rp*.L00 $proj-Talys2/rp*.L01 $proj-Talys2/rp*.L02 $proj-Talys2/astrorate.g " ; fi
-            if [[ $parv$proj == [3\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/rp*.L00 $proj-Talys3/rp*.L01 $proj-Talys3/rp*.L02 $proj-Talys3/astrorate.g " ; fi
-            if [[ $parv$proj == [4\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys4/rp*.tot $proj-Talys4/rp*.L00 $proj-Talys4/rp*.L01 $proj-Talys4/rp*.L02 $proj-Talys4/astrorate.g " ; fi
-            if [[ $parv$proj == [5\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys5/rp*.tot $proj-Talys5/rp*.L00 $proj-Talys5/rp*.L01 $proj-Talys5/rp*.L02 $proj-Talys5/astrorate.g " ; fi
+#            if [[ $parv$proj == [1\+][n\+][1\+][1\+][pa] ]] ; then string=$string"$proj-Talys1/rp*.tot $proj-Talys1/rp*.L00 $proj-Talys1/rp*.L01 $proj-Talys1/rp*.L02 $proj-Talys1/astrorate.g " ; fi
+#            if [[ $parv$proj == [1\+][y\+][4\+][3\+]p ]]    ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/rp*.L00 $proj-Talys2/rp*.L01 $proj-Talys2/rp*.L02 $proj-Talys2/astrorate.g " ; fi
+#            if [[ $parv$proj == [1\+][y\+][5\+][4\+]p ]]    ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/rp*.L00 $proj-Talys3/rp*.L01 $proj-Talys3/rp*.L02 $proj-Talys3/astrorate.g " ; fi
+#            if [[ $parv$proj == [2\+][n\+][1\+][1\+][^p] ]] ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/rp*.L00 $proj-Talys2/rp*.L01 $proj-Talys2/rp*.L02 $proj-Talys2/astrorate.g " ; fi
+#            if [[ $parv$proj == [3\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/rp*.L00 $proj-Talys3/rp*.L01 $proj-Talys3/rp*.L02 $proj-Talys3/astrorate.g " ; fi
+#            if [[ $parv$proj == [4\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys4/rp*.tot $proj-Talys4/rp*.L00 $proj-Talys4/rp*.L01 $proj-Talys4/rp*.L02 $proj-Talys4/astrorate.g " ; fi
+#            if [[ $parv$proj == [5\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys5/rp*.tot $proj-Talys5/rp*.L00 $proj-Talys5/rp*.L01 $proj-Talys5/rp*.L02 $proj-Talys5/astrorate.g " ; fi
          done
          rpfiles=$(ls $(echo $string | sed "s/\+/\*/g") 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
          kkrpfiles=$(ls $(echo $string | sed "s/\+/\*/g") 2>/dev/null | sort -u )
