@@ -73,7 +73,7 @@ for filename in *.cc ; do
    mkdir tmp
    cd tmp
    cmake -DGeant4_DIR=$G4LIB -DCMAKE_INSTALL_PREFIX=../ ../
-   make install
+   make install -j2
    cd ../
-#   rm -rf tmp
+   rm -rf tmp
 done

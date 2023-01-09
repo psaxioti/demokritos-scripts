@@ -1,3 +1,10 @@
+demokritos-scripts (0.3-0) stable; urgency=low
+
+  * Updated versions of geant_make, mpa2ascii, qt_install and
+    Talys_script scripts
+
+ -- Axiotis Michail <psaxioti@gmail.com>  Mon, 09 Jan 2023 16:38:26 +0200
+
 demokritos-scripts (0.2-0) stable; urgency=low
 
   * Updated versions of geant_make, mpa2ascii, qt_install and

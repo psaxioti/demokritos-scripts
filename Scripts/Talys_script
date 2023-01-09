@@ -23,6 +23,7 @@ MakeInput () {
    echo "element $element" >> input
    echo "mass $mass" >> input
    echo "energy energies" >> input
+   if [ $transeps ] ; then echo "transeps $transeps" >> input ; fi
    if [ $popeps ] ; then echo "popeps $popeps" >> input ; fi
    echo "alphaomp $alp" >> input
    echo "jlmomp $jlm" >> input
@@ -34,7 +35,6 @@ MakeInput () {
    echo "relativistic n" >> input
   echo "filechannels y" >> input
   echo "channels y" >> input
-#   echo "transeps 1.00E-20" >> input
    echo "astro $ast" >> input
    echo "astrogs $astgs" >> input
 }
@@ -157,8 +157,8 @@ CalculateChi (){
       if [ -d chi2 ] ; then rm -rf chi2 ; fi
       mkdir chi2
       expfiles=$(ls $TalysWorkDir/data/$mass$element/* 2>/dev/null | sed "s/.*\/.*$element\/\(.*\)/\1/g") #"
-      ztar=$(grep $mass$element /usr/local/Installed/talys-$talysversion/structure/masses/audi/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
-      mtar=$(grep $mass$element /usr/local/Installed/talys-$talysversion/structure/masses/audi/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
+      ztar=$(grep $mass$element /usr/local/share/talys/talys$(echo $talysversion | sed "s/\.//")/structure/masses/audi/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
+      mtar=$(grep $mass$element /usr/local/share/talys/talys$(echo $talysversion | sed "s/\.//")/structure/masses/audi/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
       for expfile in ${expfiles[@]} ; do
          reaction=$(echo $expfile | sed "s/.*\_\(.*\)\_.*/\1/g") #"
          case $reaction in
@@ -207,6 +207,7 @@ if [ ! $1 ] ; then
    echo "Give energy step (MeV) : .05" >> SampleInput
    echo "Give Cbreak p (optional) : " >> SampleInput
    echo "Give Cbreak n (optional) : " >> SampleInput
+   echo "Give transeps (optional) : " >> SampleInput
    echo "Give popeps (optional) : " >> SampleInput
    echo "Give xseps (optional) : " >> SampleInput
    echo "astro y/n (can be more than one) (optional, default n) : n" >> SampleInput
@@ -228,6 +229,7 @@ else
    IFS=' ' read -a energystp  <<< $(grep -i "Give.*energy.*step"         $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a cbreakp    <<< $(grep -i "Give.*Cbreak.*p"            $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a cbreakn    <<< $(grep -i "Give.*Cbreak.*n"            $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a transeps   <<< $(grep -i "Give.*transeps"             $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a popeps     <<< $(grep -i "Give.*popeps"               $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a xseps      <<< $(grep -i "Give.*xseps"                $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a astro      <<< $(grep -i "astro[^g].*y\/n"            $1 | sed "s/.*:\(.*\)/\1/") #"   
@@ -238,7 +240,7 @@ else
    IFS=' ' read -a parRanges  <<< $(grep -i "Calculate.*Partial.*Ranges" $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a ratio      <<< $(grep -i "Calculate.*ratio"           $1 | sed "s/.*:\(.*\)/\1/") #"
    
-if [ ! $talysv ] ; then talysv=1.4 ; fi
+if [ ! $talysv ] ; then talysv=1.8 ; fi
 if [ ! $astro ] ; then astro=n ; fi
 if [ ! $astrogs ] ; then astrogs=n ; fi
 
@@ -296,6 +298,6 @@ if [ ! $astrogs ] ; then astrogs=n ; fi
       done
    done
 fi
-if [ "${talysflag[0]}" == "y" ] ; then if [ -e energies ] ; then rm -f energies ; fi ; fi
+#if [ "${talysflag[0]}" == "y" ] ; then if [ -e energies ] ; then rm -f energies ; fi ; fi
 echo "Finished!"
 exit 0
