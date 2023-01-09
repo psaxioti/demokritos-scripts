@@ -1,0 +1,11 @@
+Source: demokritos-scripts
+Section: Productivity/Science/Physics
+Priority: optional
+Maintainer: Axiotis Michail
+Build-Depends: debhelper (>= 9)
+
+Package: demokritos-scripts
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Scripts made at Demokritos lab
+ This package has useful scripts made and used at the demokritos Lab, for converting data between formats, or run Talys and geant4

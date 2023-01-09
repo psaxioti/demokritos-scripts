@@ -1,0 +1,251 @@
+#!/bin/bash
+
+Define_Dir () {
+   unset rr
+   unset rrgs
+   if [ "$ast" == "y" ] ; then rr="-rr" ; fi
+   if [ "$astgs" == "y" ] ; then rrgs="gs" ; fi
+   case $alp$jlm$ldm$stre$projectile in
+      1n11[pa] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys1$rr$rrgs ;;
+      1y43p    ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys2$rr$rrgs ;;
+      1y54p    ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys3$rr$rrgs ;;
+      2n11[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys2$rr$rrgs ;;
+      3y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys3$rr$rrgs ;;
+      4y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys4$rr$rrgs ;;
+      5y54[^p] ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-Talys5$rr$rrgs ;;
+      *        ) Talys_dir=Talys-$talysversion/$mass$element/$projectile-$alp$jlm$ldm$stre$rr$rrgs
+   esac
+}
+
+MakeInput () {
+   echo "Making input file for $mass$element for $projectile with $alp$jlm$ldm$stre astro $ast and astrogs $astgs"
+   echo "projectile $projectile" > input
+   echo "element $element" >> input
+   echo "mass $mass" >> input
+   echo "energy energies" >> input
+   if [ $popeps ] ; then echo "popeps $popeps" >> input ; fi
+   echo "alphaomp $alp" >> input
+   echo "jlmomp $jlm" >> input
+   echo "ldmodel $ldm" >> input
+   echo "strength $stre" >> input
+   if [ $xseps ] ; then echo "xseps $xseps" >> input ; fi
+   if [ $cbreakp ] ; then echo "Cbreak p $cbreakp" >> input ; fi
+   if [ $cbreakn ] ; then echo "Cbreak n $cbreakn" >> input ; fi
+   echo "relativistic n" >> input
+  echo "filechannels y" >> input
+  echo "channels y" >> input
+#   echo "transeps 1.00E-20" >> input
+   echo "astro $ast" >> input
+   echo "astrogs $astgs" >> input
+}
+
+CalculateRanges () {
+   if [ -d Talys-$talysversion/$mass$element ] ; then
+      echo "Calculating ranges for $mass$element"
+      cd Talys-$talysversion/$mass$element
+      if [ -d Ranges ] ; then rm -rf Ranges ; fi
+      mkdir Ranges
+      projectiles=( p a n d )
+      for proj in ${projectiles[@]} ; do
+         rpfiles=$(ls $proj-*/rp*.tot $proj-*/astrorate.g 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+         for rpfile in ${rpfiles[@]} ; do
+            sed '/#/d' $proj-*/$rpfile | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > Ranges/$proj-ranges-$rpfile
+            cp Ranges/$proj-ranges-$rpfile Ranges/kkranges-$rpfile
+               while read line ; do
+                  sorted=$(grep "^\ *$line" $proj-*/$rpfile | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+                  min=$(echo $sorted | cut -f1 -d' ')
+                  max=$(echo $sorted | cut -f$(echo $sorted | wc -w) -d' ')
+                  minfiles=$(grep "$line.*$min" $proj-*/$rpfile | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+                  maxfiles=$(grep "$line.*$max" $proj-*/$rpfile | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+                  sed -i "/^\ *$line/c\ $line $min $max MINIMUM IN $minfiles MAXIMUM IN $maxfiles" Ranges/$proj-ranges-$rpfile
+               done < Ranges/kkranges-$rpfile
+               rm -f Ranges/kkranges-$rpfile
+         done
+         unset rpfiles
+      done
+   fi
+   cd $TalysWorkDir
+}
+
+CalculatePartialRanges () {
+   if [ -d Talys-$talysversion/$mass$element ] ; then
+      echo "Calculating partial ranges for $mass$element"
+      cd Talys-$talysversion/$mass$element
+      if [ -d PartialRanges ] ; then rm -rf PartialRanges ; fi
+      mkdir PartialRanges
+      projectiles=( p a n d )
+      for proj in ${projectiles[@]} ; do
+         for parv in ${parRanges[@]} ; do
+            string=$string"$proj-$parv/rp*.tot $proj-$parv/astrorate.g "
+            if [[ $parv$proj == [1\+][n\+][1\+][1\+][pa] ]] ; then string=$string"$proj-Talys1/rp*.tot $proj-Talys1/astrorate.g " ; fi
+            if [[ $parv$proj == [1\+][y\+][4\+][3\+]p ]]    ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/astrorate.g " ; fi
+            if [[ $parv$proj == [1\+][y\+][5\+][4\+]p ]]    ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/astrorate.g " ; fi
+            if [[ $parv$proj == [2\+][n\+][1\+][1\+][^p] ]] ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/astrorate.g " ; fi
+            if [[ $parv$proj == [3\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/astrorate.g " ; fi
+            if [[ $parv$proj == [4\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys4/rp*.tot $proj-Talys4/astrorate.g " ; fi
+            if [[ $parv$proj == [5\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys5/rp*.tot $proj-Talys5/astrorate.g " ; fi
+         done
+         rpfiles=$(ls $(echo $string | sed "s/\+/\*/g") 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+         kkrpfiles=$(ls $(echo $string | sed "s/\+/\*/g") 2>/dev/null | sort -u )
+
+         for rpfile in ${rpfiles[@]} ; do
+#echo $rpfile
+#printf "$kkrpfiles\n" | grep $rpfile
+#printf "$kkrpfiles\n" | grep $rpfile
+            sed '/#/d' $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > PartialRanges/$proj-ranges-$rpfile
+            cp PartialRanges/$proj-ranges-$rpfile PartialRanges/kkranges-$rpfile
+            while read line ; do
+               sorted=$(grep "^\ *$line" $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+               min=$(echo $sorted | cut -f1 -d' ')
+               max=$(echo $sorted | cut -f$(echo $sorted | wc -w) -d' ')
+               minfiles=$(grep "$line.*$min" $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+               maxfiles=$(grep "$line.*$max" $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+               sed -i "/^\ *$line/c\ $line $min $max MINIMUM IN $minfiles MAXIMUM IN $maxfiles" PartialRanges/$proj-ranges-$rpfile
+            done < PartialRanges/kkranges-$rpfile
+            rm -f PartialRanges/kkranges-$rpfile
+         done
+         unset rpfiles
+         unset string
+      done
+   fi
+   cd $TalysWorkDir
+}
+
+CalculateChi (){
+   if [ -d Talys-$talysversion/$mass$element ] ; then
+      echo "Calculating chi2 for $mass$element"
+      cd Talys-$talysversion/$mass$element
+      if [ -d chi2 ] ; then rm -rf chi2 ; fi
+      mkdir chi2
+      expfiles=$(ls $TalysWorkDir/data/$mass$element/* 2>/dev/null | sed "s/.*\/.*$element\/\(.*\)/\1/g") #"
+      ztar=$(grep $mass$element /usr/local/Installed/talys-$talysversion/structure/masses/audi/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
+      mtar=$(grep $mass$element /usr/local/Installed/talys-$talysversion/structure/masses/audi/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
+      for expfile in ${expfiles[@]} ; do
+         reaction=$(echo $expfile | sed "s/.*\_\(.*\)\_.*/\1/g") #"
+         case $reaction in
+            pg ) csfiles=$(ls */rp*$(($ztar+1))*$(($mass+1))*.tot) ; beam=p ;;
+            pn ) csfiles=$(ls */rp*$(($ztar+1))*$(($mass+0))*.tot) ; beam=p ;;
+            pp ) csfiles=$(ls */rp*$(($ztar+0))*$(($mass+0))*.tot) ; beam=p ;;
+            pa ) csfiles=$(ls */rp*$(($ztar-1))*$(($mass-3))*.tot) ; beam=p ;;
+            ag ) csfiles=$(ls */rp*$(($ztar+2))*$(($mass+4))*.tot) ; beam=a ;;
+            an ) csfiles=$(ls */rp*$(($ztar+2))*$(($mass+3))*.tot) ; beam=a ;;
+            ap ) csfiles=$(ls */rp*$(($ztar+1))*$(($mass+3))*.tot) ; beam=a ;;
+            aa ) csfiles=$(ls */rp*$(($ztar+0))*$(($mass+0))*.tot) ; beam=a ;;
+            ng ) csfiles=$(ls */rp*$(($ztar+0))*$(($mass+1))*.tot) ; beam=n ;;
+            nn ) csfiles=$(ls */rp*$(($ztar+0))*$(($mass+0))*.tot) ; beam=n ;;
+            np ) csfiles=$(ls */rp*$(($ztar-1))*$(($mass+0))*.tot) ; beam=n ;;
+            na ) csfiles=$(ls */rp*$(($ztar-2))*$(($mass-3))*.tot) ; beam=n ;;
+         esac
+         for csfile in ${csfiles[@]} ; do
+            chi_calc $csfile $TalysWorkDir/data/$mass$element/$expfile $mtar $beam >> chi2/$reaction-$expfile
+         done
+         unset csfiles
+         unset beam
+      done
+      unset rpfiles
+   fi
+   cd $TalysWorkDir
+}
+
+if [ ! $TalysWorkDir ] ; then
+   echo "TalysWorkDir is not defined."
+   read -p "Give folder for Talys calculations and data " TalysWorkDir
+   echo "export TalysWorkDir=$TalysWorkDir" >> ~/.bashrc
+   if [ ! -d $TalysWorkDir ] ; then mkdir -p $TalysWorkDir ; fi
+fi
+cd $TalysWorkDir
+
+if [ ! $1 ] ; then
+   echo "Making SampleInput"
+   echo "Give Talys Versions (can be more than one) : 1.4" >> SampleInput
+   echo "Give Nuclei (In either form 78Se Se78) (can be more than one) : Se78" >> SampleInput
+   echo "Give projectile (can be n p a) (ONLY ONE) : p" >> SampleInput
+   echo "Give alphaomps (1-5) (can be more than one) : 1 2" >> SampleInput
+   echo "jlmomp y/n (can be more than one) : y n" >> SampleInput
+   echo "Give ldmodels (1-6) (can be more than one) : 1" >> SampleInput
+   echo "Give strengths (1-5) (can be more than one) : 1" >> SampleInput
+   echo "Give energy Limits (MeV) : 0 11" >> SampleInput
+   echo "Give energy step (MeV) : .05" >> SampleInput
+   echo "Give Cbreak p (optional) : " >> SampleInput
+   echo "Give Cbreak n (optional) : " >> SampleInput
+   echo "Give popeps (optional) : " >> SampleInput
+   echo "Give xseps (optional) : " >> SampleInput
+   echo "astro y/n (can be more than one) (optional, default n) : n" >> SampleInput
+   echo "astrogs y/n (can be more than one) (optional, default n) : n" >> SampleInput
+   echo "Run Talys y/n : n" >> SampleInput
+   echo "Calculate Ranges y/n : n" >> SampleInput
+   echo "Calculate Chi y/n : n" >> SampleInput 
+   echo "Calculate Partial Ranges (optional) : 1n++ +y+4" >> SampleInput  
+else
+   IFS=' ' read -a talysv     <<< $(grep -i "Give.*Talys.*Versions"      $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a nucleus    <<< $(grep -i "Give.*Nuclei"               $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a projectile <<< $(grep -i "Give.*projectile"           $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a alphaomp   <<< $(grep -i "Give.*alphaomps"            $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a jlmomp     <<< $(grep -i "jlmomp.*y\/n"               $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a ldmodel    <<< $(grep -i "Give.*ldmodels"             $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a strength   <<< $(grep -i "Give.*strengths"            $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a energy     <<< $(grep -i "Give.*energy.*Limits"       $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a energystp  <<< $(grep -i "Give.*energy.*step"         $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a cbreakp    <<< $(grep -i "Give.*Cbreak.*p"            $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a cbreakn    <<< $(grep -i "Give.*Cbreak.*n"            $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a popeps     <<< $(grep -i "Give.*popeps"               $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a xseps      <<< $(grep -i "Give.*xseps"                $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a astro      <<< $(grep -i "astro[^g].*y\/n"            $1 | sed "s/.*:\(.*\)/\1/") #"   
+   IFS=' ' read -a astrogs    <<< $(grep -i "astrogs.*y\/n"              $1 | sed "s/.*:\(.*\)/\1/") #" 
+   IFS=' ' read -a talysflag  <<< $(grep -i "Run.*Talys.*y\/n"           $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a rangesflag <<< $(grep -i "Calculate.*Ranges.*y\/n"    $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a chiflag    <<< $(grep -i "Calculate.*chi.*y\/n"       $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a parRanges  <<< $(grep -i "Calculate.*Partial.*Ranges" $1 | sed "s/.*:\(.*\)/\1/") #"
+   
+if [ ! $talysv ] ; then talysv=1.4 ; fi
+if [ ! $astro ] ; then astro=n ; fi
+if [ ! $astrogs ] ; then astrogs=n ; fi
+
+   if [ "${talysflag[0]}" == "y" ] ; then
+      if [ -e energies ] ; then rm -f energies ; fi
+      kkener=${energy[0]}
+      while (( $(echo "$kkener<=${energy[1]}" | bc -l) )) ; do
+         if (( $(echo "$kkener>0" | bc -l) )) ; then echo $kkener >> ./energies ; fi
+         kkener=$(echo "$kkener+$energystp" | bc -l)
+      done
+      unset kkener
+   fi
+   
+   for talysversion in ${talysv[@]} ; do
+      for nuc in ${nucleus[@]} ; do
+         mass=$(echo $nuc | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" ) #"
+         element=$(echo $nuc | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/") #"
+         echo "$mass$element"
+         for alp in ${alphaomp[@]} ; do
+            for jlm in ${jlmomp[@]} ; do
+               for ldm in ${ldmodel[@]} ; do
+                  for stre in ${strength[@]} ; do
+                     for ast in ${astro[@]} ; do
+                        for astgs in ${astrogs[@]} ; do
+   			  if [ "${talysflag[0]}" == "y" ] ; then 
+			     Define_Dir
+                             if [ -d $Talys_dir ] ; then rm -rf $Talys_dir ; fi
+                             mkdir -p $Talys_dir
+                             cp energies $Talys_dir
+                             cd $Talys_dir
+                             echo "$(pwd)"
+                             MakeInput
+                             echo "Running Talys"
+                             time talys-$talysversion < input > output
+			  fi
+                           cd $TalysWorkDir
+                        done
+                     done
+                  done
+               done
+            done
+         done
+   if [ "${rangesflag[0]}" == "y" ] ; then time CalculateRanges ; fi
+   if [ $parRanges ] ; then time CalculatePartialRanges ; fi
+   if [ "${chiflag[0]}" == "y" ] ; then time CalculateChi ; fi
+      done
+   done
+fi
+if [ "${talysflag[0]}" == "y" ] ; then if [ -e energies ] ; then rm -f energies ; fi ; fi
+echo "Finished!"
+exit 0

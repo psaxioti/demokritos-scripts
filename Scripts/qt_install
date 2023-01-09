@@ -1,0 +1,80 @@
+#!/bin/bash
+
+appname=$(pwd | sed "s/.*\/\(.*\)/\1/")                                  #"
+
+if uname -a | grep -iq linux 
+   then
+   OS="linux"
+elif uname -a | grep -iq mac
+   then
+   OS="mac"
+else
+   echo "You are running on a non supported system"
+   exit 1
+fi
+
+if [[ "$OS" == "mac" ]]
+   then
+   if hash qmake 2>/dev/null
+      then
+      program=qmake
+   else
+      echo "qmake is not installed"
+      exit 2 
+   fi
+   qt_flags=("QT += core gui" "greaterThan(QT_MAJOR_VERSION, 4): QT += widgets" "APP_Data_FILES.files = data/masses.dat" "APP_Data_FILES.path = Contents/MacOS/data" "STP_Data_FILES.files = data/SCOEF.95A" "STP_Data_FILES.path = Contents/MacOS/data" "QMAKE_BUNDLE_DATA += APP_Data_FILES STP_Data_FILES")
+elif [[ "$OS" == "linux" ]]
+   then
+   if [[ "$1" == "-win" ]]
+      then 
+      if hash mingw64-qmake-qt5 2>/dev/null
+         then
+         program=mingw64-qmake-qt5
+      else
+         echo "mingw64-qmake-qt5 is not installed"
+         exit 2 
+      fi
+   else
+      if grep -iq opensuse /etc/os-release
+         then
+         if hash qmake-qt5 2>/dev/null
+            then program=qmake-qt5
+         fi
+         if [[ "$1" == "-qt4" ]]
+            then
+            if hash qmake 2>/dev/null
+               then
+               program=qmake
+            else
+               echo "qmake is not installed"
+               exit 2
+            fi
+         fi
+      else
+         if hash qmake 2>/dev/null
+            then
+            program=qmake
+         else
+            echo "qmake is not installed"
+            exit 2
+         fi 
+      fi
+   fi
+   qt_flags=("QT += core gui" "greaterThan(QT_MAJOR_VERSION, 4): QT += widgets")
+fi
+
+$program -project "${qt_flags[@]}"
+$program
+make
+make clean
+
+if [[ "$1" == "-win" ]] ; then mv release/*.exe ./ ; rm -rf debug release ; fi
+rm -rf $appname.pro Makefile*
+
+if [[ "$OS" == "mac" ]]
+   then
+   macdeployqt $appname.app -dmg
+   rm -rf .qmake.stash $appname.app
+fi
+
+exit 0

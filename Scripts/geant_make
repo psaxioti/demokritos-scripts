@@ -1,0 +1,79 @@
+#!/bin/bash
+
+function make_cmakelist
+{
+   echo -e "set(projName ${filename%.*})" > CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e '#----------------------------------------------------------------------------' >> CMakeLists.txt
+   echo -e '# Setup the project' >> CMakeLists.txt
+   echo -e 'cmake_minimum_required(VERSION 2.6 FATAL_ERROR)' >> CMakeLists.txt
+   echo -e 'project(${projName})' >> CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e '#----------------------------------------------------------------------------' >> CMakeLists.txt
+   echo -e '# Find Geant4 package, activating all available UI and Vis drivers by default' >> CMakeLists.txt
+   echo -e '# You can set WITH_GEANT4_UIVIS to OFF via the command line or ccmake/cmake-gui' >> CMakeLists.txt
+   echo -e '# to build a batch mode only executable' >> CMakeLists.txt
+   echo -e '#' >> CMakeLists.txt
+   echo -e 'option(WITH_GEANT4_UIVIS "Build program with Geant4 UI and Vis drivers" ON)' >> CMakeLists.txt
+   echo -e 'if(WITH_GEANT4_UIVIS)' >> CMakeLists.txt
+   echo -e '  find_package(Geant4 REQUIRED ui_all vis_all)' >> CMakeLists.txt
+   echo -e 'else()' >> CMakeLists.txt
+   echo -e '  find_package(Geant4 REQUIRED)' >> CMakeLists.txt
+   echo -e 'endif()' >> CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e '#----------------------------------------------------------------------------' >> CMakeLists.txt
+   echo -e '# Setup Geant4 include directories and compile definitions' >> CMakeLists.txt
+   echo -e '# Setup include directory for this project' >> CMakeLists.txt
+   echo -e '#' >> CMakeLists.txt
+   echo -e 'include(${Geant4_USE_FILE})' >> CMakeLists.txt
+   echo -e 'include_directories(${PROJECT_SOURCE_DIR}/include)' >> CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e '#----------------------------------------------------------------------------' >> CMakeLists.txt
+   echo -e '# Locate sources and headers for this project' >> CMakeLists.txt
+   echo -e '# NB: headers are included so they will show up in IDEs' >> CMakeLists.txt
+   echo -e '#' >> CMakeLists.txt
+   echo -e 'file(GLOB sources ${PROJECT_SOURCE_DIR}/src/*.cc)' >> CMakeLists.txt
+   echo -e 'file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.hh)' >> CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e '#----------------------------------------------------------------------------' >> CMakeLists.txt
+   echo -e '# Add the executable, and link it to the Geant4 libraries' >> CMakeLists.txt
+   echo -e '#' >> CMakeLists.txt
+   echo -e 'add_executable(${projName} ${projName} ${sources} ${headers})' >> CMakeLists.txt
+   echo -e 'target_link_libraries(${projName} ${Geant4_LIBRARIES})' >> CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e '#----------------------------------------------------------------------------' >> CMakeLists.txt
+   echo -e '# Copy all scripts to the build directory, i.e. the directory in which we' >> CMakeLists.txt
+   echo -e '# build B1. This is so that we can run the executable directly because it' >> CMakeLists.txt
+   echo -e '# relies on these scripts being in the current working directory.' >> CMakeLists.txt
+   echo -e '#' >> CMakeLists.txt
+   echo -e 'set(PROJ_SCRIPTS' >> CMakeLists.txt
+   echo -e '  ' >> CMakeLists.txt
+   echo -e '  )' >> CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e 'foreach(_script ${PROJ_SCRIPTS})' >> CMakeLists.txt
+   echo -e '  configure_file(' >> CMakeLists.txt
+   echo -e '    ${PROJECT_SOURCE_DIR}/${_script}' >> CMakeLists.txt
+   echo -e '    ${PROJECT_BINARY_DIR}/${_script}' >> CMakeLists.txt
+   echo -e '    COPYONLY' >> CMakeLists.txt
+   echo -e '    )' >> CMakeLists.txt
+   echo -e 'endforeach()' >> CMakeLists.txt
+   echo -e '' >> CMakeLists.txt
+   echo -e '#----------------------------------------------------------------------------' >> CMakeLists.txt
+   echo -e '# Install the executable to 'bin' directory under CMAKE_INSTALL_PREFIX' >> CMakeLists.txt
+   echo -e '#' >> CMakeLists.txt
+   echo -e 'install(TARGETS ${projName} DESTINATION bin)' >> CMakeLists.txt
+}
+
+for filename in *.cc ; do
+   rm -rf tmp
+   if [ ! -f CMakeLists.txt ] ; then
+      $(make_cmakelist)
+   fi
+   mkdir tmp
+   cd tmp
+   cmake -DGeant4_DIR=/usr/local/Installed/cern/geant4/lib/Geant4-9.6.2/ -DCMAKE_INSTALL_PREFIX=../ ../
+   make install
+   cd ../
+#   rm -rf tmp
+done

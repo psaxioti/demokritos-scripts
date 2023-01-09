@@ -1,0 +1,27 @@
+#!/bin/bash
+
+if test $1 ; then
+   if [ -f $1.evnt ] ; then
+      rm -f $1.dat
+      sed -n '2p' $1.evnt | (read v1 v2 v3
+      for filename in $1*.evnt ; do
+         echo -e "Processing file $filename"
+         sed '$d' < $filename > $1_tmp
+         sed -i '/Kmax/d' $1_tmp
+         sed -i '/^'"$v1"' '"$v2"' /d' $1_tmp
+         cat $1_tmp >> $1.dat
+      done
+      v3=`wc -l $1.dat | awk '{print $1}' `
+      echo -e "$v1 $v2 $v3" > .$1.dat
+      rm -f $1_tmp)
+   else
+      echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      echo -e "  Event file $1.evnt doesn't exist  !!!!!!"
+      echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+   fi   
+else
+   echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+   echo -e "!!!!!  Give name for event files  !!!!!"
+   echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+fi
+exit 0
