@@ -72,7 +72,7 @@ for filename in *.cc ; do
    fi
    mkdir tmp
    cd tmp
-   cmake -DGeant4_DIR=/usr/local/Installed/cern/geant4/lib/Geant4-9.6.2/ -DCMAKE_INSTALL_PREFIX=../ ../
+   cmake -DGeant4_DIR=$G4LIB -DCMAKE_INSTALL_PREFIX=../ ../
    make install
    cd ../
 #   rm -rf tmp

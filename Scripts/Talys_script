@@ -39,6 +39,37 @@ MakeInput () {
    echo "astrogs $astgs" >> input
 }
 
+CalculateRatiosRanges () {
+   if [ -d Talys-$talysversion/$mass$element ] ; then
+      echo "Calculating ratios ranges for $mass$element"
+      cd Talys-$talysversion/$mass$element/ratio
+      if [ -d Ranges ] ; then rm -rf Ranges ; fi
+      mkdir Ranges
+      projectiles=( p a n d )
+      for proj in ${projectiles[@]} ; do
+         rpfiles=$(ls $proj-*/ratioOut 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+         for rpfile in ${rpfiles[@]} ; do
+            sed '/#/d' $proj-*/$rpfile | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > Ranges/$proj-ranges-$rpfile
+            cp Ranges/$proj-ranges-$rpfile Ranges/kkranges-$rpfile
+	    rm -f Ranges/$proj-ranges-$rpfile
+               while read line ; do
+		  sorted=$(grep "^\ *$line " $proj-*/$rpfile | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g -u) #"
+                  min=$(echo $sorted | cut -f1 -d' ')
+                  max=$(echo $sorted | cut -f$(echo $sorted | wc -w) -d' ')
+                  minfiles=$(grep "$line.*$min" $proj-*/$rpfile | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' '| xargs -n1 | sort -u | xargs ) #"
+                  maxfiles=$(grep "$line.*$max" $proj-*/$rpfile | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' '| xargs -n1 | sort -u | xargs ) #"
+		  echo $line $min $max MINIMUM IN $minfiles MAXIMUM IN $maxfiles >>  Ranges/$proj-ranges-$rpfile 
+#		  echo $(grep "$line.*$min" $proj-*/$rpfile | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' | xargs -n1 | sort -u | xargs) >> ~/Desktop/testingkk             
+#		 sed -i "/^\ *$line/c\ $line $min $max MINIMUM IN $minfiles MAXIMUM IN $maxfiles" Ranges/$proj-ranges-$rpfile
+               done < Ranges/kkranges-$rpfile
+               rm -f Ranges/kkranges-$rpfile
+         done
+         unset rpfiles
+      done
+   fi
+   cd $TalysWorkDir
+}
+
 CalculateRanges () {
    if [ -d Talys-$talysversion/$mass$element ] ; then
       echo "Calculating ranges for $mass$element"
@@ -47,12 +78,16 @@ CalculateRanges () {
       mkdir Ranges
       projectiles=( p a n d )
       for proj in ${projectiles[@]} ; do
-         rpfiles=$(ls $proj-*/rp*.tot $proj-*/astrorate.g 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+         rpfiles=$(ls $proj-*/rp*.tot $proj-*/rp*.L00 $proj-*/rp*.L01 $proj-*/rp*.L02 $proj-*/astrorate.g 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
          for rpfile in ${rpfiles[@]} ; do
             sed '/#/d' $proj-*/$rpfile | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > Ranges/$proj-ranges-$rpfile
             cp Ranges/$proj-ranges-$rpfile Ranges/kkranges-$rpfile
                while read line ; do
+		if [[ $rpfile == *"L0"* ]] ; then
                   sorted=$(grep "^\ *$line" $proj-*/$rpfile | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+		else
+		  sorted=$(grep "^\ *$line" $proj-*/$rpfile | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+		fi
                   min=$(echo $sorted | cut -f1 -d' ')
                   max=$(echo $sorted | cut -f$(echo $sorted | wc -w) -d' ')
                   minfiles=$(grep "$line.*$min" $proj-*/$rpfile | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
@@ -76,14 +111,14 @@ CalculatePartialRanges () {
       projectiles=( p a n d )
       for proj in ${projectiles[@]} ; do
          for parv in ${parRanges[@]} ; do
-            string=$string"$proj-$parv/rp*.tot $proj-$parv/astrorate.g "
-            if [[ $parv$proj == [1\+][n\+][1\+][1\+][pa] ]] ; then string=$string"$proj-Talys1/rp*.tot $proj-Talys1/astrorate.g " ; fi
-            if [[ $parv$proj == [1\+][y\+][4\+][3\+]p ]]    ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/astrorate.g " ; fi
-            if [[ $parv$proj == [1\+][y\+][5\+][4\+]p ]]    ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/astrorate.g " ; fi
-            if [[ $parv$proj == [2\+][n\+][1\+][1\+][^p] ]] ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/astrorate.g " ; fi
-            if [[ $parv$proj == [3\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/astrorate.g " ; fi
-            if [[ $parv$proj == [4\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys4/rp*.tot $proj-Talys4/astrorate.g " ; fi
-            if [[ $parv$proj == [5\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys5/rp*.tot $proj-Talys5/astrorate.g " ; fi
+            string=$string"$proj-$parv/rp*.tot $proj-$parv/rp*.L00 $proj-$parv/rp*.L01 $proj-$parv/rp*.L02 $proj-$parv/astrorate.g "
+            if [[ $parv$proj == [1\+][n\+][1\+][1\+][pa] ]] ; then string=$string"$proj-Talys1/rp*.tot $proj-Talys1/rp*.L00 $proj-Talys1/rp*.L01 $proj-Talys1/rp*.L02 $proj-Talys1/astrorate.g " ; fi
+            if [[ $parv$proj == [1\+][y\+][4\+][3\+]p ]]    ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/rp*.L00 $proj-Talys2/rp*.L01 $proj-Talys2/rp*.L02 $proj-Talys2/astrorate.g " ; fi
+            if [[ $parv$proj == [1\+][y\+][5\+][4\+]p ]]    ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/rp*.L00 $proj-Talys3/rp*.L01 $proj-Talys3/rp*.L02 $proj-Talys3/astrorate.g " ; fi
+            if [[ $parv$proj == [2\+][n\+][1\+][1\+][^p] ]] ; then string=$string"$proj-Talys2/rp*.tot $proj-Talys2/rp*.L00 $proj-Talys2/rp*.L01 $proj-Talys2/rp*.L02 $proj-Talys2/astrorate.g " ; fi
+            if [[ $parv$proj == [3\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys3/rp*.tot $proj-Talys3/rp*.L00 $proj-Talys3/rp*.L01 $proj-Talys3/rp*.L02 $proj-Talys3/astrorate.g " ; fi
+            if [[ $parv$proj == [4\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys4/rp*.tot $proj-Talys4/rp*.L00 $proj-Talys4/rp*.L01 $proj-Talys4/rp*.L02 $proj-Talys4/astrorate.g " ; fi
+            if [[ $parv$proj == [5\+][y\+][5\+][4\+][^p] ]] ; then string=$string"$proj-Talys5/rp*.tot $proj-Talys5/rp*.L00 $proj-Talys5/rp*.L01 $proj-Talys5/rp*.L02 $proj-Talys5/astrorate.g " ; fi
          done
          rpfiles=$(ls $(echo $string | sed "s/\+/\*/g") 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
          kkrpfiles=$(ls $(echo $string | sed "s/\+/\*/g") 2>/dev/null | sort -u )
@@ -95,7 +130,11 @@ CalculatePartialRanges () {
             sed '/#/d' $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\([0-9]\) /\1|/g" | cut -f1 -d'|' | sort -g -u > PartialRanges/$proj-ranges-$rpfile
             cp PartialRanges/$proj-ranges-$rpfile PartialRanges/kkranges-$rpfile
             while read line ; do
+	     if [[ $rpfile == *"L0"* ]] ; then
                sorted=$(grep "^\ *$line" $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+	     else
+               sorted=$(grep "^\ *$line" $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\([0-9]\) /\1|/g" | cut -f2 -d'|' | sort -g) #"
+	     fi
                min=$(echo $sorted | cut -f1 -d' ')
                max=$(echo $sorted | cut -f$(echo $sorted | wc -w) -d' ')
                minfiles=$(grep "$line.*$min" $(printf "$kkrpfiles\n" | grep $rpfile) | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
@@ -175,7 +214,8 @@ if [ ! $1 ] ; then
    echo "Run Talys y/n : n" >> SampleInput
    echo "Calculate Ranges y/n : n" >> SampleInput
    echo "Calculate Chi y/n : n" >> SampleInput 
-   echo "Calculate Partial Ranges (optional) : 1n++ +y+4" >> SampleInput  
+   echo "Calculate Partial Ranges (optional) : 1n++ +y+4" >> SampleInput
+   echo "Calculate ratio (first over second): rp035080.L00 rp035080.tot" >> SampleInput  
 else
    IFS=' ' read -a talysv     <<< $(grep -i "Give.*Talys.*Versions"      $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a nucleus    <<< $(grep -i "Give.*Nuclei"               $1 | sed "s/.*:\(.*\)/\1/") #"
@@ -196,6 +236,7 @@ else
    IFS=' ' read -a rangesflag <<< $(grep -i "Calculate.*Ranges.*y\/n"    $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a chiflag    <<< $(grep -i "Calculate.*chi.*y\/n"       $1 | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a parRanges  <<< $(grep -i "Calculate.*Partial.*Ranges" $1 | sed "s/.*:\(.*\)/\1/") #"
+   IFS=' ' read -a ratio      <<< $(grep -i "Calculate.*ratio"           $1 | sed "s/.*:\(.*\)/\1/") #"
    
 if [ ! $talysv ] ; then talysv=1.4 ; fi
 if [ ! $astro ] ; then astro=n ; fi
@@ -234,6 +275,14 @@ if [ ! $astrogs ] ; then astrogs=n ; fi
                              time talys-$talysversion < input > output
 			  fi
                            cd $TalysWorkDir
+			if [ $ratio ] ; then
+			  Define_Dir
+			  cd $Talys_dir
+		        if [ -d ../ratio/$projectile-$alp$jlm$ldm$stre ] ; then rm -rf ../ratio/$projectile-$alp$jlm$ldm$stre ; fi
+			  mkdir -p ../ratio/$projectile-$alp$jlm$ldm$stre
+			  ratio "${ratio[0]}" "${ratio[1]}" >> ../ratio/$projectile-$alp$jlm$ldm$stre/ratioOut
+			fi
+                           cd $TalysWorkDir
                         done
                      done
                   done
@@ -241,6 +290,7 @@ if [ ! $astrogs ] ; then astrogs=n ; fi
             done
          done
    if [ "${rangesflag[0]}" == "y" ] ; then time CalculateRanges ; fi
+   if [ $ratio ] ; then time CalculateRatiosRanges ; fi
    if [ $parRanges ] ; then time CalculatePartialRanges ; fi
    if [ "${chiflag[0]}" == "y" ] ; then time CalculateChi ; fi
       done

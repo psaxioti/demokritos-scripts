@@ -18,11 +18,11 @@ if [[ "$OS" == "mac" ]]
    if hash qmake 2>/dev/null
       then
       program=qmake
+      qt_flags=("QT += core gui" "greaterThan(QT_MAJOR_VERSION, 4): QT += widgets" "APP_Data_FILES.files = data/masses.dat" "APP_Data_FILES.path = Contents/MacOS/data" "STP_Data_FILES.files = data/SCOEF.95A" "STP_Data_FILES.path = Contents/MacOS/data" "QMAKE_BUNDLE_DATA += APP_Data_FILES STP_Data_FILES")
    else
       echo "qmake is not installed"
       exit 2 
    fi
-   qt_flags=("QT += core gui" "greaterThan(QT_MAJOR_VERSION, 4): QT += widgets" "APP_Data_FILES.files = data/masses.dat" "APP_Data_FILES.path = Contents/MacOS/data" "STP_Data_FILES.files = data/SCOEF.95A" "STP_Data_FILES.path = Contents/MacOS/data" "QMAKE_BUNDLE_DATA += APP_Data_FILES STP_Data_FILES")
 elif [[ "$OS" == "linux" ]]
    then
    if [[ "$1" == "-win" ]]
@@ -35,41 +35,75 @@ elif [[ "$OS" == "linux" ]]
          exit 2 
       fi
    else
-      if grep -iq opensuse /etc/os-release
+      if [[ "$1" == "-qt4" ]]
          then
-         if hash qmake-qt5 2>/dev/null
-            then program=qmake-qt5
-         fi
-         if [[ "$1" == "-qt4" ]]
-            then
-            if hash qmake 2>/dev/null
-               then
-               program=qmake
-            else
-               echo "qmake is not installed"
-               exit 2
-            fi
-         fi
-      else
          if hash qmake 2>/dev/null
             then
             program=qmake
          else
             echo "qmake is not installed"
             exit 2
-         fi 
+         fi
+      elif hash qmake-qt5 2>/dev/null
+         then program=qmake-qt5
+         qt_flags+=("DEPENDPATH += . include src" "INCLUDEPATH += . include")
+      elif hash qmake 2>/dev/null
+         then
+         program=qmake
+      else
+         echo "qmake is not installed"
+         exit 2
       fi
    fi
-   qt_flags=("QT += core gui" "greaterThan(QT_MAJOR_VERSION, 4): QT += widgets")
+   qt_flags+=("QT += core gui" "greaterThan(QT_MAJOR_VERSION, 4): QT += widgets")
 fi
 
+qt_version=$($program -v | grep "Qt\ version" | sed "s/.\+Qt\ version\ \([0-9.]\+\).\+/\1/")                                                  #"
 $program -project "${qt_flags[@]}"
 $program
 make
 make clean
-
-if [[ "$1" == "-win" ]] ; then mv release/*.exe ./ ; rm -rf debug release ; fi
 rm -rf $appname.pro Makefile*
+
+if [ -f $appname ]
+   then
+   mv $appname $appname\_Qt_$qt_version
+fi
+
+if [[ "$1" == "-win" ]]
+   then
+   mkdir Win_$appname
+   mv release/*.exe ./Win_$appname/
+   rm -rf debug release
+   if hash wine 2>/dev/null
+      then
+      until [ $PID ]
+         do
+         wine Win_$appname/$appname.exe 2>kk &
+         sleep 5s
+         PID=$(pgrep $appname)
+         if [ $PID ]
+            then
+            kill -9 $PID
+            sleep 5s
+            rm -f kk*
+            exit 0
+         else
+            grep ".dll" kk | cut -d" " -f3 > kk1
+            sort -u kk1 > kk
+            IFS=$'\n' read -a dlls <<< $(cat kk)
+            for dll in ${dlls[@]}
+               do
+               if [ ! -f Win_$appname/$dll ] ; then cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/$dll Win_$appname/ ; fi
+            done
+         fi
+         rm -f kk*
+      done
+   else
+      echo "wine is not installed"
+      exit 2
+   fi
+fi
 
 if [[ "$OS" == "mac" ]]
    then

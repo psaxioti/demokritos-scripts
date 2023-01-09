@@ -1,43 +1,135 @@
 #!/bin/bash
 
+ADC_MIN=1
+ADC_MAX=8
+NEW_EXT=".tv"
+
+usage="
+Usage: `basename $0` [OPTION]... [FILE]...
+Transform mpa FILEs in the current directory.
+The output file will be named as FILE_[ADC_number].tv
+If no FILEs are specified all the mpa files in the directory will be transformed.
+If no options are given the output will be a single column ascii file for each ADC present in the FILEs.
+
+  -h, --help                    display this help and exit
+  -d, --deadtime-correction     calculate the spectrum corrected for deadtime
+  -2, --simnra, --two-columns   output two column file (channel_no content)
+  -g, --gupix                   output file for gupix
+  -v, --verbose                 add verbose. Inactive for the moment
+      --adc=ADC_No              output spectrum only for the ADC_No ADC.
+                                ADC_no is an integer in the range $ADC_MIN to $ADC_MAX
+      --adc_min=ADC_No          change the ADC_MIN value.
+                                It is used to transform a range of ADCs.
+                                NOTE: incompatible with the --adc option
+      --adc_max=ADC_No          change the ADC_MAX value.
+                                It is used to transform a range of ADCs.
+                                NOTE: incompatible with the --adc option
+"
+
 function mpa_to_ascii
 {
-   ADC=8
-   while [ $ADC -ge 0 ]; do
-      if grep -q DATA$((ADC-1)) $filename ; then
-         newfilename=$(echo $filename | sed "s/\.mpa/\_$ADC\.tv/")
-	 sed "1,/DATA$((ADC-1))/d" $filename > $newfilename
-	 sed -i "/DATA/q" $newfilename
-	 sed -i "/DATA/d" $newfilename
-	 fi
-	 ADC=$((ADC-1))
+   for ADC in `eval echo "{$ADC_MIN..$ADC_MAX}"` ; do
+      if [ $only_adc ] && [ "$ADC" != "$only_adc" ] ; then continue ; fi
+      if grep -q DATA$((ADC-1)) $file ; then
+         newfilename=$(echo $file | sed "s/\.mpa/\_$ADC$NEW_EXT/")
+         if [ -f $newfilename ] ; then rm -rf $newfilename ; fi
+         realtime=$(sed -n "/ADC$ADC/,/[DA][AD][TC][0-9A]/ p" $file | sed -n "/realtime/p" | sed "s/.*=\(.*\)/\1/")     #"
+         livetime=$(sed -n "/ADC$ADC/,/[DA][AD][TC][0-9A]/ p" $file | sed -n "/livetime/p" | sed "s/.*=\(.*\)/\1/")     #"
+         factor=`bc -l <<< $realtime/$livetime`
+         sed "1,/DATA$((ADC-1))/d" $file > $newfilename
+         sed -i "/DATA/q" $newfilename
+         sed -i "/DATA/d" $newfilename
+         if [ $dtc ] ; then sed "s/\([0-9]\+\)/\1*$factor/" $newfilename | bc -l > dumpfile ; mv -f dumpfile $newfilename ; fi
+         if [ $tc ] ; then nl -nln -w6 $newfilename > dumpfile ; mv -f dumpfile $newfilename ; fi
+         if [ $gupix ] ; then sed -i "1i `sed -n "$=" $newfilename` 0" $newfilename ; fi
+         unset realtime
+         unset livetime
+      fi
    done
 }
 
-if test $1 ; then
-   while [ "$1" != "" ]; do
-      if [ -f $1 ] ; then
-	    filename=$1
-	    $(mpa_to_ascii)
-	 else
-	    echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-	    echo -e "File $1 doesn't exist"
-	    echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-	 fi
-	 shift
-   done
-elif ls *.mpa ; then
-   echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-   echo -e "Converting all mpa files in the directory"
-   echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-   for filename in *.mpa ; do
-      $(mpa_to_ascii)
-   done
-else
-   echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-   echo -e "There are no mpa files in the directory"
-   echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+for arg in "$@" ; do
+   case $1 in
+      -d|--deadtime-correction)
+         dtc="1"
+         shift
+      ;;
+      -2|--simnra|--two-columns)
+         tc=1
+         shift
+      ;;
+      -g|--gupix)
+         gupix="1"
+         shift
+      ;;
+      -h|--help)
+         echo "$usage"
+         exit 0
+      ;;
+      -v|--verbose)
+         verbose="1"
+         shift
+      ;;
+      --adc=[$ADC_MIN-$ADC_MAX])
+         only_adc=`echo $arg | sed "s/\-\-adc\=\([0-9]\)/\1/"`
+         shift
+      ;;
+      --adc=*)
+         only_adc=`echo $arg | sed "s/\-\-adc\=\([0-9]\)/\1/"`
+         echo "ADC number $only_adc is out of range ($ADC_MIN-$ADC_MAX)."
+         exit 1
+      ;;
+      --adc_min=[$ADC_MIN-$ADC_MAX])
+         ADC_MIN=`echo $arg | sed "s/\-\-adc\_min\=\([0-9]\)/\1/"`
+         shift
+      ;;
+      --adc_min=*)
+         echo "ADC number `echo $arg | sed "s/\-\-adc\_min\=\([0-9]\)/\1/"` is out of range ($ADC_MIN-$ADC_MAX)."
+         exit 1
+      ;;
+      --adc_max=[$ADC_MIN-$ADC_MAX])
+         ADC_MAX=`echo $arg | sed "s/\-\-adc\_max\=\([0-9]\)/\1/"`
+         shift
+      ;;
+      --adc_max=*)
+         echo "ADC number `echo $arg | sed "s/\-\-adc\_max\=\([0-9]\)/\1/"` is out of range ($ADC_MIN-$ADC_MAX)."
+         exit 1
+      ;;
+      -*|--*)
+         echo "Unknown option."
+         echo "Type mpa2ascii -h or --help for usage"
+         exit 1
+      ;;
+      *)
+         files+=("$arg")
+         shift
+      ;;
+   esac
+done
 
+if [ ! $files ] ; then
+   ls *.mpa &>/dev/null
+   if [ $? = "0" ] ; then   
+      echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      echo -e "Converting all mpa files in the directory"
+      echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      files=`ls *.mpa`
+   else
+      echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      echo -e "There are no mpa files in the directory"
+      echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+   fi
 fi
-   
+
+for file in ${files[@]} ; do
+   if [ -f $file ] ; then
+      sed -i 's/\r$//' $file
+      mpa_to_ascii
+   else
+      echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      echo -e "File $file doesn't exist"
+      echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+   fi
+done
+
 exit 0
