@@ -1,6 +1,89 @@
 #!/bin/bash
 
-#TalysWorkDir="/home/axiotis/Downloads/Talys_script_new/test"
+TalysWorkDir="/home/axiotis/Data/Talys_script/test"
+NumberOfThreads=`nproc`
+declare -i NumberOfWorkingThreads=NumberOfThreads/2
+CurWorkDir=`pwd`
+
+qstat >/dev/null 2>&1
+if [ "$?" == "0" ] ; then
+   pc_type="cluster"
+   find_dir="${HOME}/.talys"
+else
+   pc_type="pc"
+   find_dir="/opt"
+fi
+
+####################################################
+NumberOfWorkingThreads=2
+CPUOccupation=80
+
+function GoodToGo {
+   RuningTalysPids=( $(jobs -p 2>/dev/null) )
+#   if [[ "${#RuningTalysPids[@]}" -ge "${NumberOfWorkingThreads}" ]] ; then
+#      echo "wait"
+#   else
+#      echo "go"
+#   fi
+
+#   if (( $(echo "${kkener}>0" | bc -l) ))
+#   if (( $(echo "$(top -bn1 | grep Cpu | sed 's|[ \t]\+| |' | cut -f2 -d' ')>${CPUOccupation}" | bc -l) )) || [[ "${#RuningTalysPids[@]}" -ge "${NumberOfWorkingThreads}" ]]
+   if (( $(echo "$(top -bn1 | grep Cpu | sed 's|[ \t]\+| |' | cut -f2 -d' ')>${CPUOccupation}" | bc -l) ))
+   then
+      echo "wait"
+   else
+      echo "go"
+   fi
+
+}
+
+declare -a RuningTalysPids
+function RunTalys {
+   if [ "${pc_type}" == "cluster" ] ; then
+      echo "talys-${talys_version} < input > output ; rm ${LogDir}/${qsubLogFileName}.o*" | qsub -cwd -V -j y -o ${LogDir} -N ${qsubLogFileName}
+      CalculateRatios
+   else
+#      RuningTalysPids=( $(jobs -p 2>/dev/null) )
+#      if [[ "${#RuningTalysPids[@]}" -ge "${NumberOfWorkingThreads}" ]] ; then
+#         wait -n ${RuningTalysPids[*]}
+#      fi
+#            echo "Outside222 $(GoodToGo) $(jobs -p 2>/dev/null)"
+sleep "$(( ${RANDOM} % 5 + 5 ))"
+      (
+#            echo "Outside $(GoodToGo) $(jobs -p 2>/dev/null)"
+#         GTG="wait"
+#         echo "outside ${GTG}"
+         while [[ "$(GoodToGo)" == "wait" ]] ; do
+            sleep "$(( ${RANDOM} % 3 + 1 ))"
+#            GTG=$(GoodToGo)
+#         echo "inside $(GoodToGo)"
+         done
+        echo "Running talys in folder ${TalysCalcDir}" >> ${LogFileName}
+        top -bn1 | grep Cpu | sed 's|[ \t]\+| |' | cut -f2 -d' '
+         talys-${talys_version} < input > output
+         echo "Finished running talys in folder ${TalysCalcDir}" >> ${LogFileName}
+         CalculateRatios
+      ) &
+   fi
+}
+
+function RunCalculateChi {
+   if [ "${pc_type}" == "cluster" ] ; then
+      echo "chi_calc_new ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile} ; rm -f ${LogDir}/chi2-${expfile}*" | qsub -cwd -V -j y -o ${LogDir} -N chi2-${expfile}
+   else
+      chi_calc_new ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile}
+   fi
+}
+
+function RunCalculateRatios {
+   if [ "${pc_type}" == "cluster" ] ; then
+      echo "ratio "${enum}" "${denom}" >> ${RatioCalcDir}/ratioOut ; rm -f ${LogDir}/ratio-${qsubLogFileName}.o*" | qsub -cwd -V -j y -o ${LogDir} -hold_jid ${qsubLogFileName} -N ratio-${qsubLogFileName}
+   else
+      echo "Calculating ratios for folder ${TalysCalcDir}" >> ${LogFileName}
+      ratio "${enum}" "${denom}" >> ${RatioCalcDir}/ratioOut
+      echo "Finished calculating ratios for folder ${TalysCalcDir}" >> ${LogFileName}
+   fi
+}
 
 function Define_Dir {
    unset rr
@@ -174,17 +257,28 @@ function CalculateChi {
             na ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-2))*$(($mass-3))*.${expfilestate} 2>/dev/null) ; beam=n ;;
          esac
          for csfile in ${csfiles[@]} ; do
-            if [ "${pc_type}" == "cluster" ] ; then
-               echo "chi_calc_new ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile} ; rm -f ${LogDir}/chi2-${expfile}*" | qsub -cwd -V -j y -o ${LogDir} -N chi2-${expfile}
-            else
-               chi_calc_new ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile}
-            fi
+            RunCalculateChi
          done
          unset csfiles
          unset beam
       done
       unset expfiles
    fi
+}
+
+function CalculateRatios {
+      if [ ${ratio} ] && [ -d ${TalysCalcDir} ] ; then
+         for enum in ${ratio_values[0]} ; do
+            if [ ! -e ${enum} ] ; then continue ; fi
+            for denom in ${ratio_values[1]} ; do
+               if [ ! -e ${denom} ] ; then continue ; fi
+               RatioCalcDir=$(echo ${TalysCalcDir} | sed "s/${mass}${element}\/${projectile}/${mass}${element}\/ratio_${enum}_over_${denom}\/${projectile}/")
+               if [ -d ${RatioCalcDir} ] ; then rm -rf ${RatioCalcDir} ; fi
+               mkdir -p ${RatioCalcDir}
+               RunCalculateRatios
+            done
+         done
+      fi
 }
 
 function iterate_on_additional_keywords {
@@ -197,37 +291,15 @@ function iterate_on_additional_keywords {
          if [ -e ${TalysCalcDir}/total.tot ] ; then calc_ener=$(( $(wc -l ${Talys_dir}/total.tot | cut -f1 -d' ') - $(grep "^#" ${Talys_dir}/total.tot | wc -l)  )) ; fi
          diff ${InputWorkDir}/energies.$$ ${Talys_dir}/energies >/dev/null 2>&1
          if [ "$?" -gt "0" -o "$(wc -l ${InputWorkDir}/energies.$$ | cut -f1 -d' ')" -ne "${calc_ener}" ] ; then
-            echo "Running talys in folder ${TalysCalcDir}" >> ${LogFileName}
             if [ ${TalysCalcDir} ] && [ -d ${TalysCalcDir} ] ; then
                rm -rf ${TalysCalcDir}/*
                cp ${InputWorkDir}/energies.$$ ${TalysCalcDir}/energies
                cd ${TalysCalcDir}
                MakeInput
-               if [ "${pc_type}" == "cluster" ] ; then
-                  echo "talys-${talys_version} < input > output ; rm ${LogDir}/${qsubLogFileName}.o*" | qsub -cwd -V -j y -o ${LogDir} -N ${qsubLogFileName}
-               else
-                  talys-${talys_version} < input > output &
-                  wait $!
-               fi
+               RunTalys
             fi
          fi
       fi
-      if [ ${ratio} ] && [ -d ${TalysCalcDir} ] ; then
-         echo "Calculating ratios for folder ${TalysCalcDir}" >> ${LogFileName}
-         for enum in ${ratio_values[0]} ; do
-            for denom in ${ratio_values[1]} ; do
-               RatioCalcDir=$(echo ${TalysCalcDir} | sed "s/${mass}${element}\/${projectile}/${mass}${element}\/ratio_${enum}_over_${denom}\/${projectile}/")
-               if [ -d ${RatioCalcDir} ] ; then rm -rf ${RatioCalcDir} ; fi
-               mkdir -p ${RatioCalcDir}
-               if [ "${pc_type}" == "cluster" ] ; then
-                  echo "ratio "${enum}" "${denom}" >> ${RatioCalcDir}/ratioOut ; rm -f ${LogDir}/ratio-${qsubLogFileName}.o*" | qsub -cwd -V -j y -o ${LogDir} -hold_jid ${qsubLogFileName} -N ratio-${qsubLogFileName}
-               else
-                  ratio "${enum}" "${denom}" >> ${RatioCalcDir}/ratioOut
-               fi
-            done
-         done
-      fi
-      echo "Finished running talys in folder ${TalysCalcDir}" >> ${LogFileName}
    else
       for dumelement in $(eval echo "\${${add_keywords[${index}]}_values[@]}") ; do
          keywords_values["${index}"]="${dumelement}"
@@ -236,8 +308,6 @@ function iterate_on_additional_keywords {
       done
    fi
 }
-
-CurWorkDir=`pwd`
 
 if [ ! ${TalysWorkDir} ] ; then
    echo "TalysWorkDir is not defined."
@@ -251,17 +321,6 @@ if [ ! -d ${TalysWorkDir} ] ; then mkdir -p ${TalysWorkDir} ; fi
 if [ ! -d ${TalysWorkDir}/data ] ; then mkdir -p ${TalysWorkDir}/data ; fi
 if [ ! -d ${TalysWorkDir}/inputs ] ; then mkdir -p ${TalysWorkDir}/inputs ; fi
 if [ ! -d ${TalysWorkDir} ] ; then echo -e "Directory ${TalysWorkDir} doesn't exist and could not be created!!!\nExiting!!!" ; exit 11 ; fi
-
-qstat >/dev/null 2>&1
-if [ "$?" == "0" ] ; then
-   batch_programm="qsub -cwd "
-   pc_type="cluster"
-   find_dir="${HOME}/.talys"
-else
-   batch_programm="batch < "
-   pc_type="pc"
-   find_dir="/opt"
-fi
 
 if [ ! $1 ] ; then
    echo "Making SampleInput in folder ${TalysWorkDir}/inputs"
@@ -281,7 +340,7 @@ Calculate elastic angular distributions (y/n, ONLY ONE) (optional, default n) :
 #####  Basic configuration of input file                                   #####
 ################################################################################
 Give Nuclei (In either form 78Se Se78) (can be more than one) : Se78
-Give projectile (can be more than one of n p d t h a g, default p) : p
+Give projectile (can be more than one of n p d t h a g) : p
 Give alphaomps (1-8) (can be more than one, default 1) : 1 2
 jlmomp y/n (can be more than one, default n) : y n
 Give ldmodels (1-6) (can be more than one, default 1) : 1
@@ -340,8 +399,8 @@ else
    IFS=' ' read -a ld_models       <<< $(grep -i "Give.*ldmodels"                  ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a strengths       <<< $(grep -i "Give.*strengths"                 ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a energy_range    <<< $(grep -i "Give.*energy.*range.*and.*step"  ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a energy          <<< $(grep -i "Give.*energy.*Limits"            ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
-   IFS=' ' read -a energystp       <<< $(grep -i "Give.*energy.*step"              ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+#   IFS=' ' read -a energy          <<< $(grep -i "Give.*energy.*Limits"            ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
+#   IFS=' ' read -a energystp       <<< $(grep -i "Give.*energy.*step"              ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a cbreak_p        <<< $(grep -i "Give.*Cbreak.*p"                 ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a cbreak_n        <<< $(grep -i "Give.*Cbreak.*n"                 ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
    IFS=' ' read -a transeps        <<< $(grep -i "Give.*transeps"                  ${InputWorkDir}/${InputFileName} | sed "s/.*:\(.*\)/\1/") #"
@@ -353,7 +412,7 @@ else
 
    add_keywords=($(sed -n "/#.*Beginning/,/#.*End/p" ${InputWorkDir}/${InputFileName} | sed "/^#/d" | cut -f1 -d' '))
 
-   if [ ! ${talys_versions} ] ; then talys_versions=1.95 ; fi
+   if [ ! ${talys_versions} ] ; then talys_versions=1.96 ; fi
    if [ ${ratio} ] && [ ! ${#ratio_values[@]} -eq 2 ] ; then 
       echo "warning: The ratio values in the input file are not correct and will be discarded!!!"
       echo "warning: The ratio values in the input file are not correct and will be discarded!!!" >> ${LogFileName}
@@ -451,18 +510,24 @@ else
                   if qstat -j "${qsubPrefix}*" 2> /dev/null | grep ${qsubPrefix} &> /dev/null ; then
                      sleep 10s
                   else
-                     if [ "${ranges_flag}" == "y" ] ; then CalculateRanges ; fi
-                     if [ ${ratio} ] ; then CalculateRatiosRanges ; fi
+                     if [ "${ranges_flag}" == "y" ] ; then
+                        CalculateRanges
+                        if [ ${ratio} ] ; then CalculateRatiosRanges ; fi
+                     fi
                      if [ ${partial_ranges} ] ; then CalculatePartialRanges ; fi
                      if [ "${chi_flag}" == "y" ] ; then CalculateChi ; fi
                      break
                   fi
                done &
             else
-               if [ "${ranges_flag}" == "y" ] ; then CalculateRanges ; fi
-               if [ ${ratio} ] ; then CalculateRatiosRanges ; fi
+               wait
+               if [ "${ranges_flag}" == "y" ] ; then
+                  CalculateRanges
+                  if [ ${ratio} ] ; then CalculateRatiosRanges ; fi
+               fi
                if [ ${partial_ranges} ] ; then CalculatePartialRanges ; fi
                if [ "${chi_flag}" == "y" ] ; then CalculateChi ; fi
+               wait
             fi
 #   Finishing do on projectiles
          done
@@ -473,5 +538,7 @@ else
 
    if [ "${talys_flag}" == "y" ] && [ -e ${InputWorkDir}/energies.$$ ] ; then rm -f ${InputWorkDir}/energies.$$ ; fi
 fi
+
+wait
 
 exit 0
