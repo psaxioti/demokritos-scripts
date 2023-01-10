@@ -5,6 +5,7 @@ ADC_MAX=8
 INT_MIN=1
 INT_MAX=8192
 NEW_EXT=".tv"
+OUTPUT_PATH=$(pwd)
 
 usage="
 Usage: `basename $0` [OPTION]... [FILE]...
@@ -22,6 +23,9 @@ If no options are given the output will be a single column ascii file for each A
   -g, --gupix                   output file for gupix
   -v, --verbose                 increase the information printed
   -s, --sum                     sum the spectra that will be processed
+      --outdir=path             define the path for the converted files
+                                NOTE: If no folder is given, the files will be created in the local folder.
+      --ext=new_ext             extension of the converted files
       --adc=ADC_No              output spectrum only for the ADC_No ADC.
                                 ADC_no is an integer in the range ${ADC_MIN} to ${ADC_MAX}
       --adc_min=ADC_No          change the ADC_MIN value.
@@ -39,7 +43,15 @@ function mpa_to_ascii
    for ADC in `eval echo "{${ADC_MIN}..${ADC_MAX}}"` ; do
       if [ ${only_adc} ] && [ "${ADC}" != "${only_adc}" ] ; then continue ; fi
       if grep -q DATA$((ADC-1)) ${file} ; then
-         newfilename=$(echo ${file} | sed "s/\.mpa/\_${ADC}${NEW_EXT}/")
+         orig_FileName=$(basename ${file})
+         new_FileName=$(echo ${orig_FileName} | sed "s/\.mpa/\_${ADC}${NEW_EXT}/")
+         if [[ ! -d ${OUTPUT_PATH} ]] ; then
+            if [ ${verbose} ] ; then echo "Folder ${OUTPUT_PATH} doesn't exist! Creating it!!!" ; fi
+            mkdir -p ${OUTPUT_PATH}
+         fi
+         newfilename="${OUTPUT_PATH}/${new_FileName}"
+         unset orig_FileName
+         unset new_FileName
          if [ -f ${newfilename} ] && [ ${force} ] ; then
             if [ ${verbose} ] ; then echo "File ${newfilename} already exists! Deleting it!!!" ; fi
             rm -f ${newfilename}
@@ -48,14 +60,18 @@ function mpa_to_ascii
             if [ ${verbose} ] ; then echo "File ${newfilename} already exists! Skiping it!!!" ; fi
             if [ ${sumation} ] ; then
                if [ ${verbose} ] ; then echo "Adding file ${newfilename} to sumation file." ; fi
-               if [ -f sumdum${ADC} ] ; then paste -d+ sumdum${ADC} ${newfilename} > sumdum${ADC}.dum ; mv -f sumdum${ADC}.dum sumdum${ADC} 
-               else cp ${newfilename} sumdum${ADC} ; fi
-               echo ${newfilename} >> suminfo_${ADC}
+               if [ -f ${OUTPUT_PATH}/sumdum${ADC} ] ; then
+                  paste -d+ ${OUTPUT_PATH}/sumdum${ADC} ${newfilename} > ${OUTPUT_PATH}/sumdum${ADC}.dum
+                  mv -f ${OUTPUT_PATH}/sumdum${ADC}.dum ${OUTPUT_PATH}/sumdum${ADC} 
+               else
+                  cp ${newfilename} ${OUTPUT_PATH}/sumdum${ADC}
+               fi
+               echo ${newfilename} >> ${OUTPUT_PATH}/suminfo_${ADC}
             fi
             if [ ${integration} ] ; then
                if [ ${verbose} ] ; then echo "Integrating file ${newfilename} between channels ${INT_MIN} and ${INT_MAX} to integration file." ; fi
                int=`bc -l <<< $(sed -n "${INT_MIN},${INT_MAX} p" ${newfilename} | tr '\n' '\+' | sed "s/\+$/\n/")`
-               echo -e "${int}\t${newfilename}" >> integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
+               echo -e "${int}\t${newfilename}" >> ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
             fi
             continue
          fi
@@ -83,22 +99,26 @@ function mpa_to_ascii
          sed -i 's/\r$//' ${newfilename}
          if [ ${dtc} ] ; then
             if [ ${verbose} ] ; then echo "Applying deadtime correction to file ${newfilename}." ; fi
-            sed "s/\([0-9]\+\)/\1*${factor}/" ${newfilename} | bc -l > dumpfile ; mv -f dumpfile ${newfilename}
+            sed "s/\([0-9]\+\)/\1*${factor}/" ${newfilename} | bc -l > ${OUTPUT_PATH}/dumpfile ; mv -f ${OUTPUT_PATH}/dumpfile ${newfilename}
          fi
          if [ ${sumation} ] ; then
             if [ ${verbose} ] ; then echo "Adding file ${newfilename} to sumation file." ; fi
-            if [ -f sumdum${ADC} ] ; then paste -d+ sumdum${ADC} ${newfilename} > sumdum${ADC}.dum ; mv -f sumdum${ADC}.dum sumdum${ADC} 
-            else cp ${newfilename} sumdum${ADC} ; fi
-            echo ${newfilename} >> suminfo_${ADC}
+            if [ -f ${OUTPUT_PATH}/sumdum${ADC} ] ; then
+               paste -d+ ${OUTPUT_PATH}/sumdum${ADC} ${newfilename} > ${OUTPUT_PATH}/sumdum${ADC}.dum
+               mv -f ${OUTPUT_PATH}/sumdum${ADC}.dum ${OUTPUT_PATH}/sumdum${ADC} 
+            else
+               cp ${newfilename} ${OUTPUT_PATH}/sumdum${ADC}
+            fi
+            echo ${newfilename} >> ${OUTPUT_PATH}/suminfo_${ADC}
          fi
          if [ ${integration} ] ; then
             if [ ${verbose} ] ; then echo "Integrating file ${newfilename} between channels ${INT_MIN} and ${INT_MAX} to integration file." ; fi
             int=`bc -l <<< $(sed -n "${INT_MIN},${INT_MAX} p" ${newfilename} | tr '\n' '\+' | sed "s/\+$/\n/")`
-            echo -e "${int}\t${newfilename}" >> integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
+            echo -e "${int}\t${newfilename}" >> ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
          fi
          if [ ${tc} ] ; then
             if [ ${verbose} ] ; then echo "Adding additional first column to file ${newfilename}." ; fi
-            nl -nln -w6 ${newfilename} > dumpfile ; mv -f dumpfile ${newfilename}
+            nl -nln -w6 ${newfilename} > ${OUTPUT_PATH}/dumpfile ; mv -f ${OUTPUT_PATH}/dumpfile ${newfilename}
          fi
          if [ ${use_calibration} ] ; then
             if [ ${verbose} ] ; then echo "Calibrating file ${newfilename}." ; fi
@@ -123,7 +143,7 @@ for arg in "$@" ; do
       ;;
       -2|--simnra|--two-columns)
          tc=1
-         NEW_EXT=".dat"
+         if [[ "${NEW_EXT}" != ".tv" ]] ; then NEW_EXT=".dat" ; fi
          shift
       ;;
       -c|--calibration)
@@ -200,6 +220,17 @@ for arg in "$@" ; do
          unset dumint
          shift
       ;;
+      --ext=*)
+         dumext=`echo ${arg} | sed "s/\-\-ext=\(.\+\)/\1/"`
+         if [[ ! `grep \. ${dumext} ]] ; then dumext=".${dumext}" ; fi
+         NEW_EXT=${dumext}
+         unset dumext
+         shift
+      ;;
+      --outdir=*)
+         OUTPUT_PATH=`echo ${arg} | sed "s/\-\-outdir=\(.\+\)/\1/"`
+         shift
+      ;;
       -*|--*)
          echo "Unknown option."
          echo "Type mpa2ascii -h or --help for usage"
@@ -215,13 +246,13 @@ done
 if [ ${use_calibration} ] && [ ! ${tc} ] ; then echo "You have specified the calibration flag without the two columns one!!!\nExiting" ; exit 4 ; fi
 
 if [ ${sumation} ] ; then
-   if [ ${verbose} ] ; then echo "Deleting sumation files sum_<ADC_No>${NEW_EXT}!!!" ; fi
-   rm -f sum_*${NEW_EXT} suminfo_*
+   if [ ${verbose} ] ; then echo "Deleting sumation files ${OUTPUT_PATH}/sum_<ADC_No>${NEW_EXT}!!!" ; fi
+   rm -f ${OUTPUT_PATH}/sum_*${NEW_EXT} suminfo_*
 fi
 
 if [ ${integration} ] ; then
-   if [ ${verbose} ] ; then echo "Deleting integration files integrations_<ADC_No>_${INT_MIN}-${INT_MAX}.txt!!!" ; fi
-   rm -f integrations_${INT_MIN}-${INT_MAX}_*.txt
+   if [ ${verbose} ] ; then echo "Deleting integration files ${OUTPUT_PATH}/integrations_<ADC_No>_${INT_MIN}-${INT_MAX}.txt!!!" ; fi
+   rm -f ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_*.txt
 fi
 
 if [ ! ${files} ] ; then
@@ -254,14 +285,14 @@ done
 unset ADC
 if [ ${sumation} ] ; then
    for ADC in `eval echo "{${ADC_MIN}..${ADC_MAX}}"` ; do
-      if [ ! -f sumdum${ADC} ] ; then continue ; fi
-      if [ ${verbose} ] ; then echo "Summing files for adc ${ADC} to sum_${ADC}${NEW_EXT} (Files summed can be found in file suminfo_${ADC})." ; fi
-      bc -l < sumdum${ADC} > sum_${ADC}${NEW_EXT}
-      rm -f sumdum${ADC}
+      if [ ! -f ${OUTPUT_PATH}/sumdum${ADC} ] ; then continue ; fi
+      if [ ${verbose} ] ; then echo "Summing files for adc ${ADC} to ${OUTPUT_PATH}/sum_${ADC}${NEW_EXT} (Files summed can be found in file ${OUTPUT_PATH}/suminfo_${ADC})." ; fi
+      bc -l < ${OUTPUT_PATH}/sumdum${ADC} > ${OUTPUT_PATH}/sum_${ADC}${NEW_EXT}
+      rm -f ${OUTPUT_PATH}/sumdum${ADC}
       if [ ${integration} ] ; then
-         if [ ${verbose} ] ; then echo "Integrating file sum_${ADC}${NEW_EXT} between channels ${INT_MIN} and ${INT_MAX} to integration file." ; fi
+         if [ ${verbose} ] ; then echo "Integrating file ${OUTPUT_PATH}/sum_${ADC}${NEW_EXT} between channels ${INT_MIN} and ${INT_MAX} to integration file." ; fi
          int=`bc -l <<< $(sed -n "${INT_MIN},${INT_MAX} p" sum_${ADC}${NEW_EXT} | tr '\n' '\+' | sed "s/\+$/\n/")`
-         echo -e "${int}\tsum_${ADC}${NEW_EXT}" >> integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
+         echo -e "${int}\tsum_${ADC}${NEW_EXT}" >> ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
       fi
    done
 fi
