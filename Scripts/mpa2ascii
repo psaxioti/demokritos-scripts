@@ -222,7 +222,7 @@ for arg in "$@" ; do
       ;;
       --ext=*)
          dumext=`echo ${arg} | sed "s/\-\-ext=\(.\+\)/\1/"`
-         if [[ ! `grep \. ${dumext} ]] ; then dumext=".${dumext}" ; fi
+         if [[ ! `grep \. ${dumext}` ]] ; then dumext=".${dumext}" ; fi
          NEW_EXT=${dumext}
          unset dumext
          shift
