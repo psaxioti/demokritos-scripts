@@ -45,6 +45,13 @@ install-indep:
 	# Add here commands to install the package
 	# The DESTDIR Has To Be Exactly
 	dpkg-parsechangelog
+	install -Dm755 Scripts/evnt2dat   $(inst_path)/evnt2dat
+	install -Dm755 Scripts/geant_make   $(inst_path)/geant_make
+	install -Dm755 Scripts/mpa2ascii   $(inst_path)/mpa2ascii
+	install -Dm755 Scripts/mpa2gupix   $(inst_path)/mpa2gupix
+	install -Dm755 Scripts/spe2ascii   $(inst_path)/spe2ascii
+	install -Dm755 Scripts/stut2ascii   $(inst_path)/stut2ascii
+	install -Dm755 Scripts/Talys_script   $(inst_path)/Talys_script
 	# --- end custom part for installing
 
 install-arch: build-arch
@@ -56,13 +63,6 @@ install-arch: build-arch
 
 	# Add here commands to install the package
 	# The DESTDIR Has To Be Exactly  /usr/src/packages/BUILD/debian/<nameOfPackage>
-	install -Dm755 Scripts/evnt2dat   $(inst_path)/evnt2dat
-	install -Dm755 Scripts/geant_make   $(inst_path)/geant_make
-	install -Dm755 Scripts/mpa2ascii   $(inst_path)/mpa2ascii
-	install -Dm755 Scripts/mpa2gupix   $(inst_path)/mpa2gupix
-	install -Dm755 Scripts/spe2ascii   $(inst_path)/spe2ascii
-	install -Dm755 Scripts/stut2ascii   $(inst_path)/stut2ascii
-	install -Dm755 Scripts/Talys_script   $(inst_path)/Talys_script
 	# --- end custom part for installing
 
 # Build architecture-independent files here.
