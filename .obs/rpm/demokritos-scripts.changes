@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Thu Nov  23 12:00:00 UTC 2023 - Michail Axiotis <psaxioti@gmail.com>
+
+- Major rewrite of mpa2ascii - added as$ convertion
+- Removed mpa2gupix, spe2ascii and stut2ascii (merged to mpa2ascii)
+- Added Talys_script_mt (development MT script)
+
+-------------------------------------------------------------------
 Mon Jan  9 16:29:21 UTC 2023 - Michail Axiotis <psaxioti@gmail.com>
 
 - Removed qt_install, now in package qt-cross-compile

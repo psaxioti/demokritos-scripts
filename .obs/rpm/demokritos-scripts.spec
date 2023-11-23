@@ -24,10 +24,8 @@ This package has useful scripts made and used at the demokritos Lab, for convert
 install -Dm755 Scripts/evnt2dat   %{buildroot}%{_bindir}/evnt2dat
 install -Dm755 Scripts/geant_make   %{buildroot}%{_bindir}/geant_make
 install -Dm755 Scripts/mpa2ascii   %{buildroot}%{_bindir}/mpa2ascii
-install -Dm755 Scripts/mpa2gupix   %{buildroot}%{_bindir}/mpa2gupix
-install -Dm755 Scripts/spe2ascii   %{buildroot}%{_bindir}/spe2ascii
-install -Dm755 Scripts/stut2ascii   %{buildroot}%{_bindir}/stut2ascii
 install -Dm755 Scripts/Talys_script   %{buildroot}%{_bindir}/Talys_script
+install -Dm755 Scripts/Talys_script   %{buildroot}%{_bindir}/Talys_script_mt
 
 %files
 %{_bindir}/*

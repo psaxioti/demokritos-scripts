@@ -4,295 +4,575 @@ ADC_MIN=1
 ADC_MAX=8
 INT_MIN=1
 INT_MAX=8192
-NEW_EXT=".tv"
+NEW_EXT="tv"
 OUTPUT_PATH=$(pwd)
 
-usage="
+KNOWN_FILES=("*.mpa")
+FileConversionFunction=("mpa_to_ascii")
+KNOWN_FILES+=("D[0-9]*.[0-9]*")
+FileConversionFunction+=("stut_to_ascii")
+KNOWN_FILES+=("*.Spe")
+FileConversionFunction+=("spe_to_ascii")
+KNOWN_FILES+=("*.as$")
+FileConversionFunction+=("OldBochum_to_ascii")
+
+declare -A LongOptions
+declare -A OptionHelp
+
+ShortOptions="h"
+LongOptions[help]="h"
+OptionHelp["h"]="display this help and exit"
+function argR[h] {
+   print_usage
+   exit 0
+}
+
+ShortOptions+="d"
+LongOptions[deatime-correction]="d"
+OptionHelp[d]="calculate the spectrum corrected for deadtime"
+function argR[d] {
+   DeadTimeOutput=1
+}
+
+ShortOptions+="2"
+LongOptions[simnra]="2"
+LongOptions[two-columns]="2"
+OptionHelp[2]="output two column file (channel_no content)"
+function argR[2] {
+   TwoColumnOutput=1
+   if [[ "${NEW_EXT}" == "tv" ]] ; then NEW_EXT="dat" ; fi
+}
+
+ShortOptions+="c"
+LongOptions[calibration]="c"
+OptionHelp[c]="It uses the calibration coefficients for calibration\nNOTE: It has to be used with the two columns flag!!!"
+function argR[c] {
+   CalibrateOutput=1
+   argR[2]
+ }
+
+ShortOptions+="f"
+LongOptions[force]="f"
+OptionHelp[f]="force convertion of file in case it already exists"
+function argR[f] {
+   ForceOutput=1
+}
+
+ShortOptions+="g"
+LongOptions[gupix]="g"
+OptionHelp[g]="output file for gupix"
+function argR[g] {
+   GupixOutput=1
+}
+
+ShortOptions+="v"
+LongOptions[verbose]="v"
+OptionHelp[v]="increase the information printed"
+function argR[v] {
+   VerboseOutput=1
+}
+
+ShortOptions+="s"
+LongOptions[sum]="s"
+OptionHelp[s]="sum the spectra that will be processed"
+function argR[s] {
+   SumOutput=1
+}
+
+ShortOptions+="o:"
+LongOptions[outdir]="o"
+OptionHelp[o]="define the path for the converted files\nNOTE: If no folder is given, the files will be created in the local folder."
+function argR[o] {
+   OUTPUT_PATH=${OPTARG}
+}
+
+ShortOptions+="e:"
+LongOptions[ext]="e"
+OptionHelp[e]="extension of the converted files"
+function argR[e] {
+   NEW_EXT=${OPTARG}
+   if [[ `grep \. ${NEW_EXT}` ]] ; then NEW_EXT=${NEW_EXT/./} ; fi
+}
+
+ShortOptions+="a:"
+LongOptions[adc]="a"
+OptionHelp[a]="output spectrum only for the ADC_No ADC\nADC_no is an integer in the range ${ADC_MIN} to ${ADC_MAX}"
+function argR[a] {
+   only_adc=${OPTARG}
+   if [ ${only_adc} -lt ${ADC_MIN} ] || [ ${only_adc} -gt ${ADC_MAX} ] ; then
+      echo "ADC number ${only_adc} is out of range (${ADC_MIN}-${ADC_MAX})."
+      exit 1
+   fi
+}
+
+ShortOptions+="m:"
+LongOptions[adc_min]="m"
+OptionHelp[m]="change the ADC_MIN value\nIt is used to transform a range of ADCs\nNOTE: incompatible with the --adc option"
+function argR[m] {
+   dumadc=${OPTARG}
+   if [ ${dumadc} -lt ${ADC_MIN} ] || [ ${dumadc} -gt ${ADC_MAX} ] ; then
+      echo "ADC number ${dumadc} is out of range (${ADC_MIN}-${ADC_MAX})."
+      exit 1
+   fi
+   ADC_MIN=${dumadc}
+   unset dumadc
+}
+
+ShortOptions+="M:"
+LongOptions[adc_max]="M"
+OptionHelp[M]="change the ADC_MAX value\nIt is used to transform a range of ADCs\nNOTE: incompatible with the --adc option"
+function argR[M] {
+   dumadc=${OPTARG}
+   if [ ${dumadc} -lt ${ADC_MIN} ] || [ ${dumadc} -gt ${ADC_MAX} ] ; then
+      echo "ADC number ${dumadc} is out of range (${ADC_MIN}-${ADC_MAX})."
+      exit 1
+   fi
+   ADC_MAX=${dumadc}
+   unset dumadc
+}
+
+ShortOptions+="i:"
+LongOptions[int_min]="i"
+OptionHelp[i]="give the min channel for integration (default is 1)"
+function argR[i] {
+   dumint=${OPTARG}
+   if [ ${dumint} -lt ${INT_MIN} ] || [ ${dumint} -gt ${INT_MAX} ] ; then
+      echo "Integration channel ${dumint} is out of range (${INT_MIN}-${INT_MAX})."
+      exit 2
+   fi
+   INT_MIN=${dumint}
+   IntegrateOutput=1
+   unset dumint
+}
+
+ShortOptions+="I:"
+LongOptions[int_max]="I"
+OptionHelp[I]="give the max channel for integration (default is 8192)"
+function argR[I] {
+   dumint=${OPTARG}
+   if [ ${dumint} -lt ${INT_MIN} ] || [ ${dumint} -gt ${INT_MAX} ] ; then
+      echo "Integration channel ${dumint} is out of range (${INT_MIN}-${INT_MAX})."
+      exit 2
+   fi
+   INT_MAX=${dumint}
+   IntegrateOutput=1
+   unset dumint
+}
+
+for arg in "$@"; do
+   shift
+   ARG=${arg%=*}
+   ARG2=${arg#*=}
+   ARG2=${ARG2/${ARG}/}
+   ARG=${ARG/--/}
+   if [[ -n "${LongOptions[${ARG}]}" ]] ; then
+      set -- "$@" "-${LongOptions[${ARG}]}"
+      if [[ -n "${ARG2}" ]] ; then
+         set -- "$@" "${ARG2}"
+      fi
+   else
+      set -- "$@" "${arg}"
+   fi
+
+   unset ARG
+   unset ARG2
+   unset arg
+done
+
+function print_usage {
+   cat << END_OF_HELP
 Usage: `basename $0` [OPTION]... [FILE]...
-Transform mpa FILEs in the current directory.
-The output file will be named as FILE_[ADC_number].tv
-If no FILEs are specified all the mpa files in the directory will be transformed.
+Transform ${KNOWN_FILES[@]} FILEs in the current directory.
+The output file will be named as FILE_[ADC_number].tv (.dat in the case of two column output)
+If no FILEs are specified all the known files in the directory will be transformed.
 If no options are given the output will be a single column ascii file for each ADC present in the FILEs.
+NOTE: For the short options expecting an arguement the value has to be seperated by a space or attached to the flag.
+NOTE: For the long options expecting an arguement the value has to be seperated by a space or an = character.
 
-  -h, --help                    display this help and exit
-  -d, --deadtime-correction     calculate the spectrum corrected for deadtime
-  -2, --simnra, --two-columns   output two column file (channel_no content)
-  -c, --calibration             It uses the calibration coefficients for calibration
-                                NOTE: It has to be used with the two columns flag!!!
-  -f, --force                   force convertion of file in case it already exists
-  -g, --gupix                   output file for gupix
-  -v, --verbose                 increase the information printed
-  -s, --sum                     sum the spectra that will be processed
-      --outdir=path             define the path for the converted files
-                                NOTE: If no folder is given, the files will be created in the local folder.
-      --ext=new_ext             extension of the converted files
-      --adc=ADC_No              output spectrum only for the ADC_No ADC.
-                                ADC_no is an integer in the range ${ADC_MIN} to ${ADC_MAX}
-      --adc_min=ADC_No          change the ADC_MIN value.
-                                It is used to transform a range of ADCs.
-                                NOTE: incompatible with the --adc option
-      --adc_max=ADC_No          change the ADC_MAX value.
-                                It is used to transform a range of ADCs.
-                                NOTE: incompatible with the --adc option
-      --int_min=channel_No      give the min channel for integration (default is 1)
-      --int_max=channel_No      give the max channel for integration (default is 8192)
-"
+END_OF_HELP
 
-function mpa_to_ascii
-{
+   PreFlagSpaces=2
+   DescriptioColumnStart=32
+
+   PreFlagSpace=`printf "%${PreFlagSpaces}s"`
+   NewLineSpace=`printf "%${DescriptioColumnStart}s"`
+
+   for (( i = 0 ; i < ${#ShortOptions} ; i++ )) ; do
+      LocalOption=${ShortOptions:$i:1}
+      LocalLongOption=""
+      PostFlagSpaces=$(( ${DescriptioColumnStart} - ${PreFlagSpaces} - 2 ))
+      if [[ "${LocalOption}" == ":" ]] ; then continue ; fi
+
+      for LOpt in "${!LongOptions[@]}" ; do
+         if [[ "${LongOptions[$LOpt]}" != "${LocalOption}" ]] ; then continue ; fi
+         LocalLongOption+=", --${LOpt}"
+         if [[ "${ShortOptions:$((i+1)):1}" == ":" ]] ; then LocalLongOption+="[ |=]value" ; fi
+      done
+
+      PostFlagSpaces=$(( ${PostFlagSpaces} - ${#LocalLongOption} ))
+      PostFlagSpace=`printf "%${PostFlagSpaces}s"`
+
+      echo -ne "${PreFlagSpace}-${LocalOption}"
+      echo -ne "${LocalLongOption}"
+      echo -ne "${PostFlagSpace}"
+      echo -e "${OptionHelp[${LocalOption}]//\\n/\\n${NewLineSpace}}"
+
+      unset LocalOption
+      unset LocalLongOption
+      unset PostFlagSpaces
+      unset PostFlagSpace
+   done
+   echo ""
+
+   unset PreFlagSpaces
+   unset PreFlagSpace
+   unset NewLineSpaces
+   unset NewLineSpace
+}
+
+function NoVerbosePrint {
+   echo -ne "$1"
+}
+
+function VerbosePrint {
+   if [ ${VerboseOutput} ] ; then 
+      NoVerbosePrint "$1"
+   fi
+
+}
+
+function mpa_to_ascii {
+   case $1 in
+      name)
+         echo "${2//.mpa/.${NEW_EXT}}"
+         ;;
+      ADCname)
+         if grep -q DATA$((${3}-1)) ${2//.${NEW_EXT}/.mpa} ; then
+            echo "${2//.${NEW_EXT}/_${3}.${NEW_EXT}}"
+         else
+            echo ""
+         fi
+         ;;
+      *time)
+         echo "$(sed -n "/ADC${3}/,/[DA][AD][TC][0-9A]/ p" ${2} | sed -n "/${1}/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")"
+         ;;
+      cal*)
+         echo "$(sed -n "/ADC${3}/,/[DA][AD][TC][0-9A]/ p" ${2} | sed -n "/${1}/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")"
+         ;;
+      convert)
+         sed -n "/DATA$((${4}-1))/,/DATA${4}/ p" ${2} | sed "/DATA/ d" > ${3}
+         unset LADC
+         ;;
+      *)
+         ;;
+   esac
+}
+
+function stut_to_ascii {
+   case $1 in
+      name)
+         echo "${2}.${NEW_EXT}"
+         ;;
+      ADCname)
+         if [[ ${3} -gt 1 ]] ; then
+            echo ""
+         else
+            echo "${2}"
+         fi
+         ;;
+      *time)
+         echo "1"
+         ;;
+      caloff)
+         echo "0"
+         ;;
+      calfact)
+         echo "1"
+         ;;
+      calfact2)
+         echo "0"
+         ;;
+      calfact3)
+         echo "0"
+         ;;
+      convert)
+         sed '1,/SpectrumText/ d' < ${2} > ${3}
+         grep ROI ${2} > dumpfile12345
+         v1=`wc -l dumpfile12345 | awk '{print $1}' `
+         rm -f dumpfile12345
+         sed -i '1,/'$v1'/ d' ${3}
+         sed -i {s/','/'\n'/g} ${3}
+         unset v1
+         ;;
+      *)
+         ;;
+   esac
+}
+
+function spe_to_ascii {
+   case $1 in
+      name)
+         echo ${2//.Spe/.${NEW_EXT}}
+         ;;
+      ADCname)
+         if [[ ${3} -gt 1 ]] ; then
+            echo ""
+         else
+            echo "${2}"
+         fi
+         ;;
+      *time)
+         echo "1"
+         ;;
+      caloff)
+         echo "0"
+         ;;
+      calfact)
+         echo "1"
+         ;;
+      calfact2)
+         echo "0"
+         ;;
+      calfact3)
+         echo "0"
+         ;;
+      convert)
+         sed "1,/0\ 4095/d" ${2} > ${3}
+         sed -i "/ROI/,\$d" ${3}
+         ;;
+      *)
+         ;;
+   esac
+}
+
+function OldBochum_to_ascii {
+   case $1 in
+      name)
+         echo ${2//.as$/.${NEW_EXT}}
+         ;;
+      ADCname)
+         if grep -q Single\ ${3} ${2//.${NEW_EXT}/.as$} ; then
+            echo "${2//.${NEW_EXT}/_${3}.${NEW_EXT}}"
+         else
+            echo ""
+         fi
+         ;;
+      *time)
+         echo "1"
+         ;;
+      caloff)
+         echo "0"
+         ;;
+      calfact)
+         echo "1"
+         ;;
+      calfact2)
+         echo "0"
+         ;;
+      calfact3)
+         echo "0"
+         ;;
+      convert)
+         FirstLines=(`grep -n  \^0\  ${2} | cut -f1 -d':'`)
+         FirstLines+=(`wc -l ${2} | cut -f1 -d' '`)
+         sed -n "${FirstLines[$((${4}-1))]},$((${FirstLines[${4}]}-1)) p" ${2} > ${3}
+         sed -i "s/^ *[0-9]\+ \+\([0-9]\+\) */\1/g" ${3}
+         ;;
+      *)
+         ;;
+   esac
+}
+
+function CorrectDeadtime {
+   if [[ ${DeadTimeOutput} ]] ; then
+      VerbosePrint "Applying deadtime correction to file ${1}.\n"
+      sed "s/\([0-9]\+\)/\1*${2}/" ${1} | bc -l > ${1}
+   fi
+}
+
+function SumSpectra {
+   if [[ ${SumOutput} ]] ; then
+      VerbosePrint "Adding file ${1} to sumation file.\n"
+      if [ -f ${OUTPUT_PATH}/sumdum${2} ] ; then
+         paste -d+ ${OUTPUT_PATH}/sumdum${2} ${1} > ${OUTPUT_PATH}/sumdum${2}.dum
+         mv -f ${OUTPUT_PATH}/sumdum${2}.dum ${OUTPUT_PATH}/sumdum${2} 
+      else
+         cp ${1} ${OUTPUT_PATH}/sumdum${2}
+      fi
+      echo ${1} >> ${OUTPUT_PATH}/suminfo_${2}
+   fi
+}
+
+function IntegrateSpectrum {
+   if [[ ${IntegrateOutput} ]] ; then
+      VerbosePrint "Integrating file ${1} between channels ${INT_MIN} and ${INT_MAX} to integration file.\n"
+      int=`bc -l <<< $(sed -n "${INT_MIN},${INT_MAX} p" ${1} | tr '\n' '\+' | sed "s/\+$/\n/")`
+      echo -e "${int}\t${1}" >> ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_${2}.txt
+   fi
+}
+
+function CreateTwoColumn {
+   if [[ ${TwoColumnOutput} ]] ; then
+      VerbosePrint "Adding additional first column to file ${1}.\n"
+      nl -nln -w6 ${1} > ${1}
+   fi
+}
+
+function CalibrateSpectrum {
+   if [[ ${CalibrateOutput} ]] ; then
+      VerbosePrint "Calibrating file ${1}.\n"
+      sed -i "s/\([0-9]\+\)[\ \t]\+\([0-9]\+\)/echo $\(echo \"${2}+(${3}*\1^1)+(${4}*\1^2)+(${5}*\1^3)\" | bc -l\)\t\2/e" ${1}
+   fi
+}
+
+function CreateGupix {
+   if [[ ${GupixOutput} ]] ; then
+      VerbosePrint "Adding header line for gupix to ${1}.\n"
+      sed -i "1i `sed -n "$=" ${1}` 0" ${1}
+   fi
+}
+
+function ConvertFile {
+   LocalFileName=$(basename $1)
+   for lextIndex in ${!KNOWN_FILES[@]} ; do
+      if grep ${KNOWN_FILES[lextIndex]//\*/\\\\*} <<< ${LocalFileName} &>/dev/null ; then
+         break
+      fi
+   done
+   NewFileName=`${FileConversionFunction[${lextIndex}]} name ${LocalFileName}`
    for ADC in `eval echo "{${ADC_MIN}..${ADC_MAX}}"` ; do
       if [ ${only_adc} ] && [ "${ADC}" != "${only_adc}" ] ; then continue ; fi
-      if grep -q DATA$((ADC-1)) ${file} ; then
-         orig_FileName=$(basename ${file})
-         new_FileName=$(echo ${orig_FileName} | sed "s/\.mpa/\_${ADC}${NEW_EXT}/")
-         if [[ ! -d ${OUTPUT_PATH} ]] ; then
-            if [ ${verbose} ] ; then echo "Folder ${OUTPUT_PATH} doesn't exist! Creating it!!!" ; fi
-            mkdir -p ${OUTPUT_PATH}
-         fi
-         newfilename="${OUTPUT_PATH}/${new_FileName}"
-         unset orig_FileName
-         unset new_FileName
-         if [ -f ${newfilename} ] && [ ${force} ] ; then
-            if [ ${verbose} ] ; then echo "File ${newfilename} already exists! Deleting it!!!" ; fi
-            rm -f ${newfilename}
-         fi
-         if [ -f ${newfilename} ] ; then
-            if [ ${verbose} ] ; then echo "File ${newfilename} already exists! Skiping it!!!" ; fi
-            if [ ${sumation} ] ; then
-               if [ ${verbose} ] ; then echo "Adding file ${newfilename} to sumation file." ; fi
-               if [ -f ${OUTPUT_PATH}/sumdum${ADC} ] ; then
-                  paste -d+ ${OUTPUT_PATH}/sumdum${ADC} ${newfilename} > ${OUTPUT_PATH}/sumdum${ADC}.dum
-                  mv -f ${OUTPUT_PATH}/sumdum${ADC}.dum ${OUTPUT_PATH}/sumdum${ADC} 
-               else
-                  cp ${newfilename} ${OUTPUT_PATH}/sumdum${ADC}
-               fi
-               echo ${newfilename} >> ${OUTPUT_PATH}/suminfo_${ADC}
-            fi
-            if [ ${integration} ] ; then
-               if [ ${verbose} ] ; then echo "Integrating file ${newfilename} between channels ${INT_MIN} and ${INT_MAX} to integration file." ; fi
-               int=`bc -l <<< $(sed -n "${INT_MIN},${INT_MAX} p" ${newfilename} | tr '\n' '\+' | sed "s/\+$/\n/")`
-               echo -e "${int}\t${newfilename}" >> ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
-            fi
-            continue
-         fi
-         if [ ${dtc} ] ; then
-            realtime=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/realtime/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
-            livetime=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/livetime/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
-            factor=`bc -l <<< ${realtime}/${livetime}`
-            if [ ${verbose} ] ; then echo "For adc ${ADC} of file ${file} we have realtime: ${realtime}, and livetime: ${livetime}." ; fi
-            if [ ${verbose} ] ; then echo "For adc ${ADC} of file ${file} the factor that will be used for deadtime correction is: ${factor}." ; fi
-         fi
-         if [ ${use_calibration} ] ; then
-            unset cal
-            cal[0]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/caloff/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
-            cal[1]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact=/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
-            cal[2]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact2/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
-            cal[3]=$(sed -n "/ADC${ADC}/,/[DA][AD][TC][0-9A]/ p" ${file} | sed -n "/calfact3/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")     #"
-            if [ ${verbose} ] ; then echo "For adc ${ADC} of file ${file} we will use the following coefficients for calibration:" ; fi
-            if [ ${verbose} ] ; then echo "Offset: ${cal[0]}" ; fi
-            if [ ${verbose} ] ; then echo "Linear: ${cal[1]}" ; fi
-            if [ ${verbose} ] ; then echo "Square: ${cal[2]}" ; fi
-            if [ ${verbose} ] ; then echo "Cube  : ${cal[3]}" ; fi
-         fi
-         if [ ${verbose} ] ; then echo "Creating file ${newfilename}, for adc ${ADC} of file ${file}." ; fi
-         sed -n "/DATA$((ADC-1))/,/DATA${ADC}/ p" ${file} | sed "/DATA/ d" > ${newfilename}
-         sed -i 's/\r$//' ${newfilename}
-         if [ ${dtc} ] ; then
-            if [ ${verbose} ] ; then echo "Applying deadtime correction to file ${newfilename}." ; fi
-            sed "s/\([0-9]\+\)/\1*${factor}/" ${newfilename} | bc -l > ${OUTPUT_PATH}/dumpfile ; mv -f ${OUTPUT_PATH}/dumpfile ${newfilename}
-         fi
-         if [ ${sumation} ] ; then
-            if [ ${verbose} ] ; then echo "Adding file ${newfilename} to sumation file." ; fi
-            if [ -f ${OUTPUT_PATH}/sumdum${ADC} ] ; then
-               paste -d+ ${OUTPUT_PATH}/sumdum${ADC} ${newfilename} > ${OUTPUT_PATH}/sumdum${ADC}.dum
-               mv -f ${OUTPUT_PATH}/sumdum${ADC}.dum ${OUTPUT_PATH}/sumdum${ADC} 
-            else
-               cp ${newfilename} ${OUTPUT_PATH}/sumdum${ADC}
-            fi
-            echo ${newfilename} >> ${OUTPUT_PATH}/suminfo_${ADC}
-         fi
-         if [ ${integration} ] ; then
-            if [ ${verbose} ] ; then echo "Integrating file ${newfilename} between channels ${INT_MIN} and ${INT_MAX} to integration file." ; fi
-            int=`bc -l <<< $(sed -n "${INT_MIN},${INT_MAX} p" ${newfilename} | tr '\n' '\+' | sed "s/\+$/\n/")`
-            echo -e "${int}\t${newfilename}" >> ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
-         fi
-         if [ ${tc} ] ; then
-            if [ ${verbose} ] ; then echo "Adding additional first column to file ${newfilename}." ; fi
-            nl -nln -w6 ${newfilename} > ${OUTPUT_PATH}/dumpfile ; mv -f ${OUTPUT_PATH}/dumpfile ${newfilename}
-         fi
-         if [ ${use_calibration} ] ; then
-            if [ ${verbose} ] ; then echo "Calibrating file ${newfilename}." ; fi
-#            cut -f1 $newfilename | sed "s/\([0-9]\+\)/${cal[0]}+(${cal[1]}*\1^1)+(${cal[2]}*\1^2)+(${cal[3]}*\1^3)/" | bc -l
-            sed -i "s/\([0-9]\+\)[\ \t]\+\([0-9]\+\)/echo $\(echo \"${cal[0]}+(${cal[1]}*\1^1)+(${cal[2]}*\1^2)+(${cal[3]}*\1^3)\" | bc -l\)\t\2/e" ${newfilename}
-         fi
-         if [ ${gupix} ] ; then
-            if [ ${verbose} ] ; then echo "Adding header line for gupix to ${newfilename}." ; fi
-            sed -i "1i `sed -n "$=" ${newfilename}` 0" ${newfilename}
-         fi
-         unset realtime
-         unset livetime
+      ADCNewFileName=`${FileConversionFunction[${lextIndex}]} ADCname ${NewFileName} ${ADC}`
+      if [[ -z "${ADCNewFileName}" ]] ; then continue ; fi
+      ADCNewFileName="${OUTPUT_PATH}/${ADCNewFileName}"
+      if [ -f ${ADCNewFileName} ] && [ ${ForceOutput} ] ; then
+         VerbosePrint "\aFile ${ADCNewFileName} already exists! Deleting it!!!\n"
+         rm -f ${ADCNewFileName}
       fi
+      if [ -f ${ADCNewFileName} ] ; then
+         VerbosePrint "\aFile ${ADCNewFileName} already exists! Skiping it!!!\n"
+      else
+         if [[ ${DeadTimeOutput} ]] ; then
+            realtime=`${FileConversionFunction[${lextIndex}]} realtime ${LocalFileName} ${ADC}`
+            livetime=`${FileConversionFunction[${lextIndex}]} livetime ${LocalFileName} ${ADC}`
+            DeadtimeFactor=`bc -l <<< ${realtime}/${livetime}`
+            VerbosePrint "For adc ${ADC} of file ${LocalFileName} we have realtime: ${realtime}, and livetime: ${livetime}.\n"
+            VerbosePrint "For adc ${ADC} of file ${LocalFileName} the factor that will be used for deadtime correction is: ${DeadtimeFactor}.\n"
+            unset realtime
+            unset livetime
+         fi
+         if [[ ${CalibrateOutput} ]] ; then
+            unset cal
+            cal[0]=`${FileConversionFunction[${lextIndex}]} caloff ${LocalFileName} ${ADC}`
+            cal[1]=`${FileConversionFunction[${lextIndex}]} calfact ${LocalFileName} ${ADC}`
+            cal[2]=`${FileConversionFunction[${lextIndex}]} calfact2 ${LocalFileName} ${ADC}`
+            cal[3]=`${FileConversionFunction[${lextIndex}]} calfact3 ${LocalFileName} ${ADC}`
+            VerbosePrint "For adc ${ADC} of file ${LocalFileName} we will use the following coefficients for calibration:\n"
+            VerbosePrint "\tOffset: ${cal[0]}"
+            VerbosePrint "\tLinear: ${cal[1]}"
+            VerbosePrint "\tSquare: ${cal[2]}"
+            VerbosePrint "\tCube  : ${cal[3]}"
+         fi
+         VerbosePrint "Creating file ${ADCNewFileName}, for adc ${ADC} of file ${LocalFileName}.\n"
+         ${FileConversionFunction[${lextIndex}]} convert ${LocalFileName} ${ADCNewFileName} ${ADC}
+         sed -i 's/\r$//' ${ADCNewFileName}
+         sed -i "/^\s*$/d" ${ADCNewFileName}
+      fi
+      if [ ! -f ${ADCNewFileName} ] ; then
+         NoVerbosePrint "\aFile ${ADCNewFileName} was not created due to some error!!!\n"
+         continue
+      fi
+      CorrectDeadtime ${ADCNewFileName} ${DeadtimeFactor}
+      SumSpectra ${ADCNewFileName} ${ADC}
+      IntegrateSpectrum ${ADCNewFileName} ${ADC}
+      CreateTwoColumn ${ADCNewFileName}
+      CalibrateSpectrum ${ADCNewFileName} ${cal[0]} ${cal[1]} ${cal[2]} ${cal[3]}
+      CreateGupix ${ADCNewFileName}
    done
 }
 
-for arg in "$@" ; do
-   case $1 in
-      -d|--deadtime-correction)
-         dtc="1"
-         shift
+OPTIND=1
+while getopts ${ShortOptions} opt ; do
+   case "$opt" in
+      [^?]*) 
+         argR[${opt}]
       ;;
-      -2|--simnra|--two-columns)
-         tc=1
-         if [[ "${NEW_EXT}" != ".tv" ]] ; then NEW_EXT=".dat" ; fi
-         shift
-      ;;
-      -c|--calibration)
-         use_calibration=1
-         shift
-      ;;
-      -f|--force)
-         force=1
-         shift
-      ;;
-      -g|--gupix)
-         gupix=1
-         shift
-      ;;
-      -h|--help)
-         echo "${usage}"
-         exit 0
-      ;;
-      -v|--verbose)
-         verbose=1
-         shift
-      ;;
-      -s|--sum)
-         sumation=1
-         shift
-      ;;
-      --adc=*)
-         only_adc=`echo ${arg} | sed "s/\-\-adc\=\([0-9]\+\)/\1/"`
-         if [ ${only_adc} -lt ${ADC_MIN} ] || [ ${only_adc} -gt ${ADC_MAX} ] ; then
-            echo "ADC number ${only_adc} is out of range (${ADC_MIN}-${ADC_MAX})."
-            exit 1
-         fi
-         shift
-      ;;
-      --adc_min=*)
-         dumadc=`echo ${arg} | sed "s/\-\-adc\_min\=\([0-9]\+\)/\1/"`
-         if [ ${dumadc} -lt ${ADC_MIN} ] || [ ${dumadc} -gt ${ADC_MAX} ] ; then
-            echo "ADC number ${dumadc} is out of range (${ADC_MIN}-${ADC_MAX})."
-            exit 1
-         fi
-         ADC_MIN=${dumadc}
-         unset dumadc
-         shift
-      ;;
-      --adc_max=*)
-         dumadc=`echo ${arg} | sed "s/\-\-adc\_max\=\([0-9]\+\)/\1/"`
-         if [ ${dumadc} -lt ${ADC_MIN} ] || [ ${dumadc} -gt ${ADC_MAX} ] ; then
-            echo "ADC number ${dumadc} is out of range (${ADC_MIN}-${ADC_MAX})."
-            exit 1
-         fi
-         ADC_MAX=${dumadc}
-         unset dumadc
-         shift
-      ;;
-      --int_min=*)
-         dumint=`echo ${arg} | sed "s/\-\-int\_min=\([0-9]\+\)/\1/"`
-         if [ ${dumint} -lt ${INT_MIN} ] || [ ${dumint} -gt ${INT_MAX} ] ; then
-            echo "Integration channel ${dumint} is out of range (${INT_MIN}-${INT_MAX})."
-            exit 2
-         fi
-         INT_MIN=${dumint}
-         integration=1
-         unset dumint
-         shift
-      ;;
-      --int_max=*)
-         dumint=`echo ${arg} | sed "s/\-\-int\_max=\([0-9]\+\)/\1/"`
-         if [ ${dumint} -lt ${INT_MIN} ] || [ ${dumint} -gt ${INT_MAX} ] ; then
-            echo "Integration channel ${dumint} is out of range (${INT_MIN}-${INT_MAX})."
-            exit 2
-         fi
-         INT_MAX=${dumint}
-         integration=1
-         unset dumint
-         shift
-      ;;
-      --ext=*)
-         dumext=`echo ${arg} | sed "s/\-\-ext=\(.\+\)/\1/"`
-         if [[ ! `grep \. ${dumext}` ]] ; then dumext=".${dumext}" ; fi
-         NEW_EXT=${dumext}
-         unset dumext
-         shift
-      ;;
-      --outdir=*)
-         OUTPUT_PATH=`echo ${arg} | sed "s/\-\-outdir=\(.\+\)/\1/"`
-         shift
-      ;;
-      -*|--*)
-         echo "Unknown option."
-         echo "Type mpa2ascii -h or --help for usage"
-         exit 3
-      ;;
-      *)
-         files+=("${arg}")
-         shift
+      '?')
+         print_usage >&2
+         exit 1
       ;;
    esac
 done
+shift $(expr $OPTIND - 1) # remove options from positional parameters
 
-if [ ${use_calibration} ] && [ ! ${tc} ] ; then echo "You have specified the calibration flag without the two columns one!!!\nExiting" ; exit 4 ; fi
 
-if [ ${sumation} ] ; then
-   if [ ${verbose} ] ; then echo "Deleting sumation files ${OUTPUT_PATH}/sum_<ADC_No>${NEW_EXT}!!!" ; fi
-   rm -f ${OUTPUT_PATH}/sum_*${NEW_EXT} suminfo_*
-fi
-
-if [ ${integration} ] ; then
-   if [ ${verbose} ] ; then echo "Deleting integration files ${OUTPUT_PATH}/integrations_<ADC_No>_${INT_MIN}-${INT_MAX}.txt!!!" ; fi
-   rm -f ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_*.txt
-fi
+files=("${@}")
 
 if [ ! ${files} ] ; then
-   ls *.mpa &>/dev/null
-   if [ $? = "0" ] ; then   
-      echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-      echo -e "Converting all mpa files in the directory"
-      echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-      files=(`ls *.mpa`)
+   for lext in ${KNOWN_FILES[@]} ; do
+      if ls ${lext} &>/dev/null ; then
+         files+=(`ls ${lext} | grep -v "${NEW_EXT}\$"`)
+      fi
+   done
+
+   if [ ${files} ] ; then   
+      NoVerbosePrint "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+      NoVerbosePrint "Converting all known files in the directory\n"
+      NoVerbosePrint "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
    else
-      echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-      echo -e "There are no mpa files in the directory"
-      echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      NoVerbosePrint "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+      NoVerbosePrint "There are no known files in the directory\n"
+      NoVerbosePrint "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+      exit 0
    fi
+fi
+
+if [[ ! -d ${OUTPUT_PATH} ]] ; then
+   VerbosePrint "Folder ${OUTPUT_PATH} doesn't exist! Creating it!!!\n"
+   mkdir -p ${OUTPUT_PATH}
+   if [[ ! -d ${OUTPUT_PATH} ]] ; then
+      NoVerbosePrint "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+      NoVerbosePrint "Could not create folder ${OUTPUT_PATH}\n"
+      NoVerbosePrint "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+      exit 3
+   fi
+fi
+
+if [ ${SumOutput} ] ; then
+   VerbosePrint "Deleting sumation files ${OUTPUT_PATH}/sum_<ADC_No>.${NEW_EXT}!!!"
+   rm -f ${OUTPUT_PATH}/sum_*.${NEW_EXT} suminfo_*
+fi
+
+if [ ${IntegrateOutput} ] ; then
+   VerbosePrint "Deleting integration files ${OUTPUT_PATH}/integrations_<ADC_No>_${INT_MIN}-${INT_MAX}.txt!!!"
+   rm -f ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_*.txt
 fi
 
 file_index=0
 for file in ${files[@]} ; do
    file_index=$((${file_index} + 1))
    if [ -f ${file} ] ; then
-      echo -ne "Processing file ${file} (${file_index}/${#files[@]})                \r"
-      mpa_to_ascii
+      VerbosePrint "Processing file ${file} (${file_index}/${#files[@]})\r"
+      ConvertFile ${file}
    else
-      echo -e "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-      echo -e "File ${file} doesn't exist"
-      echo -e "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      echo ""
+      NoVerbosePrint "\a!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+      NoVerbosePrint "File ${file} (${file_index}/${#files[@]}) doesn't exist\n"
+      NoVerbosePrint "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
    fi
 done
 
 unset ADC
-if [ ${sumation} ] ; then
+if [ ${SumOutput} ] ; then
    for ADC in `eval echo "{${ADC_MIN}..${ADC_MAX}}"` ; do
       if [ ! -f ${OUTPUT_PATH}/sumdum${ADC} ] ; then continue ; fi
-      if [ ${verbose} ] ; then echo "Summing files for adc ${ADC} to ${OUTPUT_PATH}/sum_${ADC}${NEW_EXT} (Files summed can be found in file ${OUTPUT_PATH}/suminfo_${ADC})." ; fi
-      bc -l < ${OUTPUT_PATH}/sumdum${ADC} > ${OUTPUT_PATH}/sum_${ADC}${NEW_EXT}
+      VerbosePrint "Summing files for adc ${ADC} to ${OUTPUT_PATH}/sum_${ADC}.${NEW_EXT} (Files summed can be found in file ${OUTPUT_PATH}/suminfo_${ADC}).\n"
+      bc -l < ${OUTPUT_PATH}/sumdum${ADC} > ${OUTPUT_PATH}/sum_${ADC}.${NEW_EXT}
       rm -f ${OUTPUT_PATH}/sumdum${ADC}
-      if [ ${integration} ] ; then
-         if [ ${verbose} ] ; then echo "Integrating file ${OUTPUT_PATH}/sum_${ADC}${NEW_EXT} between channels ${INT_MIN} and ${INT_MAX} to integration file." ; fi
-         int=`bc -l <<< $(sed -n "${INT_MIN},${INT_MAX} p" sum_${ADC}${NEW_EXT} | tr '\n' '\+' | sed "s/\+$/\n/")`
-         echo -e "${int}\tsum_${ADC}${NEW_EXT}" >> ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
+      if [ ${IntegrateOutput} ] ; then
+         VerbosePrint "Integrating file ${OUTPUT_PATH}/sum_${ADC}.${NEW_EXT} between channels ${INT_MIN} and ${INT_MAX} to integration file.\n"
+         int=`bc -l <<< $(sed -n "${INT_MIN},${INT_MAX} p" sum_${ADC}.${NEW_EXT} | tr '\n' '\+' | sed "s/\+$/\n/")`
+         echo -e "${int}\tsum_${ADC}.${NEW_EXT}" >> ${OUTPUT_PATH}/integrations_${INT_MIN}-${INT_MAX}_${ADC}.txt
       fi
    done
 fi
