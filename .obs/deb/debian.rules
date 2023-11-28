@@ -49,7 +49,7 @@ install-indep:
 	install -Dm755 Scripts/geant_make   $(inst_path)/geant_make
 	install -Dm755 Scripts/mpa2ascii   $(inst_path)/mpa2ascii
 	install -Dm755 Scripts/Talys_script   $(inst_path)/Talys_script
-	install -Dm755 Scripts/Talys_script   $(inst_path)/Talys_script_mt
+	install -Dm755 Scripts/Talys_script_mt   $(inst_path)/Talys_script_mt
 	# --- end custom part for installing
 
 install-arch: build-arch

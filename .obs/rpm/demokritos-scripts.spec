@@ -25,7 +25,7 @@ install -Dm755 Scripts/evnt2dat   %{buildroot}%{_bindir}/evnt2dat
 install -Dm755 Scripts/geant_make   %{buildroot}%{_bindir}/geant_make
 install -Dm755 Scripts/mpa2ascii   %{buildroot}%{_bindir}/mpa2ascii
 install -Dm755 Scripts/Talys_script   %{buildroot}%{_bindir}/Talys_script
-install -Dm755 Scripts/Talys_script   %{buildroot}%{_bindir}/Talys_script_mt
+install -Dm755 Scripts/Talys_script_mt   %{buildroot}%{_bindir}/Talys_script_mt
 
 %files
 %{_bindir}/*
