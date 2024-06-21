@@ -175,9 +175,9 @@ function CalculateChi {
          esac
          for csfile in ${csfiles[@]} ; do
             if [ "${pc_type}" == "cluster" ] ; then
-               echo "chi_calc_new ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile} ; rm -f ${LogDir}/chi2-${expfile}*" | qsub -cwd -V -j y -o ${LogDir} -N chi2-${expfile}
+               echo "chi_calc ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile} ; rm -f ${LogDir}/chi2-${expfile}*" | qsub -cwd -V -j y -o ${LogDir} -N chi2-${expfile}
             else
-               chi_calc_new ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile}
+               chi_calc ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile}
             fi
          done
          unset csfiles

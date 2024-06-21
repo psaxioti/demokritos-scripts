@@ -1,0 +1,1019 @@
+#!/bin/bash
+
+NumberOfWorkingThreads=$((`nproc`-2))
+CurWorkDir=`pwd`
+
+function NoVerbosePrint {
+   echo -ne "${1}"
+}
+
+function VerbosePrint {
+   [[ ${VerboseOutput} ]] && NoVerbosePrint "${1}"
+   [[ ${LogFile} ]] && echo -ne "${1}" >> ${LogFile}
+}
+
+function ScriptExit {
+   case ${1} in
+      0)
+         VerbosePrint "Success!!!\n"
+         exit ${1}
+         ;;
+      1)
+         # Illegal option
+         ;;
+      2)
+         NoVerbosePrint "\nRequested number of parallel jobs (${NumberOfWorkingThreads}) must be an integer in the range (1-`nproc`).\n" >&2
+         ;;
+      3)
+         NoVerbosePrint "\nRequested number of parallel jobs (${NumberOfWorkingThreads}) is out of range (1-`nproc`).\n" >&2
+         ;;
+      4)
+         NoVerbosePrint "\nYou have provided more than 1 (${#@}) input files.\n" >&2
+         ;;
+      5)
+         NoVerbosePrint "\nMasses files where not found in folder ${find_dir}.\n" >&2
+         ;;
+      6)
+         NoVerbosePrint "\nYou haven't given any input!!!\nExiting!!!\nRun Again the Program!!!\n" >&2
+         ;;
+      7)
+         NoVerbosePrint "\nDirectory ${TalysWorkDir} doesn't exist and could not be created!!!\nExiting!!!\n" >&2
+         ;;
+      8)
+         NoVerbosePrint "\nFile ${UserInputFileName} does not exist or is empty.\nPlease check the filename provided and run again\n" >&2
+         ;;
+      9)
+         NoVerbosePrint "\nDirectory ${InputWorkDir} doesn't exist and could not be created!!!\nExiting!!!\n" >&2
+         ;;
+      10)
+         NoVerbosePrint "\nDirectory ${LogDir} doesn't exist and could not be created!!!\nExiting!!!\n" >&2
+         ;;
+      11)
+         NoVerbosePrint "\nPlease input at least one nucleus\nExiting!!!\n" >&2
+         ;;
+      12)
+         NoVerbosePrint "\nPlease input at least one projectile\nExiting!!!\n" >&2
+         ;;
+      13)
+         NoVerbosePrint "\nYou asked to run Talys but you have not given the energy values for the calculation!!!\nExiting!!!\n" >&2
+         ;;
+   esac
+   NoVerbosePrint "\n" >&2
+   print_usage >&2
+   exit ${1}
+}
+
+function print_usage {
+   cat << END_OF_HELP
+Usage: `basename $0` [OPTION]... [InputFile]...
+Run talys and talys related functions according to the [InputFile] provided.
+NOTE: All actions will be processed in the Lab system
+
+END_OF_HELP
+
+   PreFlagSpaces=2
+   DescriptionColumnStart=32
+
+   PreFlagSpace=`printf "%${PreFlagSpaces}s"`
+   NewLineSpace=`printf "%${DescriptionColumnStart}s"`
+
+   for (( i = 0 ; i < ${#ShortOptions} ; i++ )) ; do
+      LocalOption=${ShortOptions:$i:1}
+      LocalLongOption=""
+      PostFlagSpaces=$(( ${DescriptionColumnStart} - ${PreFlagSpaces} - 2 ))
+      [[ "${LocalOption}" == ":" ]] && continue
+
+      for LOpt in "${!LongOptions[@]}" ; do
+         [[ "${LongOptions[$LOpt]}" != "${LocalOption}" ]] && continue
+         LocalLongOption+=", --${LOpt}"
+         [[ "${ShortOptions:$((i+1)):1}" == ":" ]] && LocalLongOption+="[ |=]value"
+      done
+      unset LOpt
+
+      PostFlagSpaces=$(( ${PostFlagSpaces} - ${#LocalLongOption} ))
+      PostFlagSpace=`printf "%${PostFlagSpaces}s"`
+
+      echo -ne "${PreFlagSpace}-${LocalOption}"
+      echo -ne "${LocalLongOption}"
+      echo -ne "${PostFlagSpace}"
+      echo -e "${OptionHelp[${LocalOption}]//\\n/\\n${NewLineSpace}}"
+
+      unset LocalOption
+      unset LocalLongOption
+      unset PostFlagSpaces
+      unset PostFlagSpace
+   done
+   echo ""
+
+   unset PreFlagSpaces
+   unset DescriptionColumnStart
+   unset PreFlagSpace
+   unset NewLineSpace
+}
+
+function Set_cmFlag {
+   find_dir="/usr/share/"
+   find_dir="${find_dir}$(ls ${find_dir} | grep talys | sort | tail -1)"
+   [ -d ${find_dir} ] || find_dir="${HOME}"
+   massesDir=$(find ${find_dir} -name "ame2020" -print -quit 2>/dev/null)
+   [ -d "${massesDir}" ] || massesDir=$(find ${find_dir} -name "audi" -print -quit 2>/dev/null)
+   [ -d "${massesDir}" ] && VerbosePrint "The masses files used for cm calculations are located in folder ${massesDir}\n"
+   [ -d "${massesDir}" ] || ScriptExit 5
+   unset find_dir
+   cmFlag=1
+}
+
+function SetTalysWorkDir {
+   if [ ! ${TalysWorkDir} ] ; then
+      NoVerbosePrint "TalysWorkDir is not defined.\n"
+      read -p "Give full path of the folder for Talys calculations and data " TalysWorkDir
+      [ ! ${TalysWorkDir} ] && ScriptExit 6
+      NoVerbosePrint "Setting ${TalysWorkDir} as TalysWorkDir in bashrc\n"
+      echo "export TalysWorkDir=${TalysWorkDir}" >> ~/.bashrc
+   fi
+
+   [ ! -d ${TalysWorkDir} ] && mkdir -p ${TalysWorkDir}
+   [ ! -d ${TalysWorkDir}/data ] && mkdir -p ${TalysWorkDir}/data
+   [ ! -d ${TalysWorkDir}/inputs ] && mkdir -p ${TalysWorkDir}/inputs
+   [ ! -d ${TalysWorkDir} ] && ScriptExit 7
+}
+
+function CreateSampleInput {
+   NoVerbosePrint "Making SampleInput in folder ${TalysWorkDir}/inputs\n"
+   SampleInputFileName="${TalysWorkDir}/inputs/SampleInput"
+   [ -f ${SampleInputFileName} ] && ( chmod 775 ${SampleInputFileName} ; rm -rf ${SampleInputFileName} )
+   cat > ${SampleInputFileName} <<_EOF_
+################################################################################
+#####  Configuration section                                               #####
+#####  Empty Talys Version means plain talys command will be executed      #####
+#####  If Talys Version is given, command talys-<TalysVersion> must exist  #####
+################################################################################
+_EOF_
+   for Option in ${ConfigOptions[@]} ; do
+      echo "${ConfigOptionsSetText[${Option}]} : ${ConfigOptionsSettedValue[${Option}]}" >> ${SampleInputFileName}
+   done
+   cat >> ${SampleInputFileName} <<_EOF_
+
+################################################################################
+#####  Basic configuration of input file                                   #####
+#####  Empty lines will be ignored, thus default values will be used       #####
+#####  Keywords relativistic, filechannels and channels will be set to     #####
+#####  n, y and y respectively anyhow!                                     #####
+################################################################################
+_EOF_
+   for Option in ${InputFileOptions[@]} ; do
+      echo "${InputFileOptionsSetText[${Option}]} : ${InputFileOptionsSettedValue[${Option}]}" >> ${SampleInputFileName}
+   done
+   cat >> ${SampleInputFileName} <<_EOF_
+
+################################################################################
+#####  Additional keywords to be added to the input file                   #####
+#####  The following three formats are recognized                          #####
+#####  1. keyword p1 p2 ...                                                #####
+#####  2. keyword p1 <p2_value1 p2_value2 p2_value3 ...> p3 p4 ...         #####
+#####  3. keyword p1 p2 <range p3Min p3Max p3step> p4 ...                  #####
+#####  where pi is the ith parameter needed for the additional keyword     #####
+################################################################################
+##### Beginning of additional keywords
+
+##### End of additional keywords
+_EOF_
+   unset Option
+   chmod 444 ${SampleInputFileName}
+   unset SampleInputFileName
+   ScriptExit 0
+}
+
+function ReadInputFile {
+   [ ! -s ${CurWorkDir}/${UserInputFileName} ] && ScriptExit 8
+   InputFileName=`basename "${UserInputFileName}"`
+   InputWorkDir=${TalysWorkDir}/${InputFileName}
+   if [ ! -d ${InputWorkDir} ] ; then 
+      mkdir -p ${InputWorkDir}
+      [ ! -d ${InputWorkDir} ] && ScriptExit 9
+   fi
+   LogDir=${InputWorkDir}/logs
+   if [ ! -d ${LogDir} ] ; then 
+      mkdir -p ${LogDir}
+      [ ! -d ${LogDir} ] && ScriptExit 10
+      InputRunNumber="0"
+   else
+      InputRunNumber=$(( `ls -art ${LogDir}/${InputFileName}*.log | tail -1 |  sed "s|.\+run\([0-9]\+\).*|\1|"` + 1 ))
+   fi
+   
+   InputFile="${InputWorkDir}/${InputFileName}_run${InputRunNumber}"
+   cp -f ${CurWorkDir}/${UserInputFileName} ${InputFile}
+   LogFile=${LogDir}/${InputFileName}_run${InputRunNumber}.log
+   unset LogDir
+
+   VerbosePrint "Running $(basename $0) for input ${InputFileName}\n"
+   VerbosePrint "################################################################################\n"
+   VerbosePrint "Reading input file for run ${InputRunNumber}\n"
+
+   for Option in ${ConfigOptions[@]} ; do
+      ReadText=$(grep "`echo "${ConfigOptionsSetText[${Option}]}" | sed "s|\ |\ *|g"`" ${InputFile} | sed "s|.*:\ *\(.*\)|\1|" | sed "s|\ \+|\||g")
+      case ${Option} in
+         "RunTalysFlag")
+            [ "${ReadText}" == "y" ] && RunTalysFlag=1
+            ;;
+         "TalysVersions")
+            [ "${ReadText}" ] && IFS=' ' read -a  TalysVersions <<< ${ReadText} || TalysVersions=( "default" )
+            ;;
+         "RangesFlag")
+            [ "${ReadText}" == "y" ] && RangesFlag=1
+            ;;
+         "ChiFlag")
+            [ "${ReadText}" == "y" ] && ChiFlag=1
+            ;;
+         "PartialRanges")
+            [ "${ReadText}" ] && IFS=' ' read -a  PartialRanges <<< ${ReadText}
+            ;;
+         "Ratios")
+            if [ "${ReadText}" ] ; then
+               IFS='/' read -a  Ratios <<< ${ReadText}
+               Ratios[0]=${Ratios[0]%?}
+               Ratios[1]=${Ratios[1]#?}
+               if [ ! ${#Ratios[@]} -eq 2 ] ; then
+                  NoVerbosePrint "\nWarning: The ratio values in the input file are not correct and will be discarded!!!\n"
+                  echo -ne "\nWarning: The ratio values in the input file are not correct and will be discarded!!!\n" >> ${LogFile}
+                  unset Ratios
+               fi
+            fi
+            ;;
+         "ElAngDistFlag")
+            [ "${ReadText}" == "y" ] && ElAngDistFlag=1
+            ;;
+      esac
+      unset ReadText
+      unset IFS
+   done
+   unset ConfigOptionsSetText
+   unset ConfigOptionsSettedValue
+   unset ConfigOptions
+
+   for Option in ${InputFileOptions[@]} ; do
+      ReadText=$(grep "`echo "${InputFileOptionsSetText[${Option}]}" | sed "s|\ |\ *|g"`" ${InputFile} | sed "s|.*:\ *\(.*\)|\1|" | xargs)
+      case ${Option} in
+         "Nuclei")
+            if [ "${ReadText}" ] ; then
+               IFS=' ' read -a  Nuclei <<< ${ReadText}
+            else
+               ScriptExit 11
+            fi
+            ;;
+         "Projectiles")
+            if [ "${ReadText}" ] ; then
+               ConfiguredKeywords+=( "${InputFileOptionsKeywords[${Option}]}" )
+               ConfiguredKeywordsValues[${ConfiguredKeywords[-1]}]="${ReadText// /|}"
+            else
+               ScriptExit 12
+            fi
+            ;;
+         "Energy")
+            if [ "${ReadText}" ] ; then
+               ConfiguredKeywords+=( "${InputFileOptionsKeywords[${Option}]}" )
+               ConfiguredKeywordsValues[${ConfiguredKeywords[-1]}]="${ReadText}"
+            else
+               [ ${RunTalysFlag} ] && ScriptExit 13
+            fi
+            ;;
+         *)
+            if [ "${ReadText}" ] ; then
+               ConfiguredKeywords+=( "${InputFileOptionsKeywords[${Option}]}" )
+               ConfiguredKeywordsValues[${ConfiguredKeywords[-1]}]="${ReadText// /|}"
+            fi
+            ;;
+      esac
+      unset ReadText
+      unset IFS
+   done
+   unset Option
+   unset InputFileOptionsSetText
+   unset InputFileOptionsSettedValue
+   unset InputFileOptionsKeywords
+   unset InputFileOptions
+
+   ConfiguredKeywords+=("relativistic")
+   ConfiguredKeywordsValues[${ConfiguredKeywords[-1]}]="n"
+   ConfiguredKeywords+=("filechannels")
+   ConfiguredKeywordsValues[${ConfiguredKeywords[-1]}]="y"
+   ConfiguredKeywords+=("channels")
+   ConfiguredKeywordsValues[${ConfiguredKeywords[-1]}]="y"
+
+   if [ ${ElAngDistFlag} ] ; then
+      ConfiguredKeywords+=( "fileelastic" )
+      ConfiguredKeywordsValues[${ConfiguredKeywords[-1]}]="y"
+      ConfiguredKeywords+=( "outangle" )
+      ConfiguredKeywordsValues[${ConfiguredKeywords[-1]}]="y"
+   fi
+   unset ElAngDistFlag
+
+   ConfiguredKeywords+=($(sed -n "/#.*Beginning/,/#.*End/p" ${InputFile} | sed "/^#/d" | cut -f1 -d' '))
+
+   additional_keywords=($(sed -n "/#.*Beginning/,/#.*End/p" ${InputFile} | sed "/^#/d" | cut -f1 -d' '))
+   for keyword in ${additional_keywords[@]} ; do
+      ReadText=$(grep "${keyword}" ${InputFile} | sed "s|${keyword}\ *\(.*\)|\1|" | sed "s|\ \+|\ |g")
+      if [[ ${ReadText} == *\<* ]] ; then
+         if [[ ${ReadText} == *\<range* ]] ; then
+            IFS=' ' read -a rangeParams <<< $(echo ${ReadText} | sed "s/.*<range\(.*\)>.*/\1/")
+            currentRangeValue=${rangeParams[0]}
+            while (( $(echo "${currentRangeValue}<=${rangeParams[1]}" | bc -l) )) ; do
+               ConfiguredKeywordsValues[${keyword}]+=$(echo ${ReadText} | sed "s/\(.*\)<range.*>\(.*\)/\1 ${currentRangeValue} \2|/" | sed "s/ \+/_/g" | sed "s|^_||" | sed "s|_$||")
+               currentRangeValue="$(echo "${currentRangeValue}+${rangeParams[2]}" | bc -l)"
+            done
+            unset rangeParams
+            unset currentRangeValue
+         else
+            for multparam in $(echo ${ReadText} | sed "s/.*<\(.*\)>.*/\1/") ; do
+               ConfiguredKeywordsValues[${keyword}]+=$(echo ${ReadText} | sed "s/\(.*\)<.*>\(.*\)/\1 ${multparam} \2|/" | sed "s/ \+/_/g" | sed "s|^_||" | sed "s|_$||")
+            done
+            unset multparam
+         fi
+         ConfiguredKeywordsValues[${keyword}]="${ConfiguredKeywordsValues[${keyword}]%|}"
+      else
+         ConfiguredKeywordsValues[${keyword}]="${ReadText}"
+      fi
+      unset ReadText
+   done
+   unset additional_keywords
+
+   VerbosePrint "################################################################################\n"
+   [ ${RunTalysFlag} ] && [ ${TalysVersions} ] && VerbosePrint "Will run talys calculations with versions: ${TalysVersions[@]//|/, }\n"
+   [ ${ForceRunTalys} ] && VerbosePrint "Will force run talys calculations\n"
+   [ ${RunTalysFlag} ] && [ ${Nuclei} ] && VerbosePrint "Will run talys calculations for nuclei: $(echo ${Nuclei[@]})\n"
+   [ ${RangesFlag} ] && VerbosePrint "Will calculate ranges\n"
+   [ ${ChiFlag} ] && VerbosePrint "Will calculate chi squares\n"
+   [ ${PartialRanges} ] && VerbosePrint "Will calculate partial ranges for: ${PartialRanges[@]//|/ } \n"
+   [ ${Ratios} ] && VerbosePrint "Will calculate ratios for: ${Ratios[0]//|/, } / ${Ratios[1]//|/, }\n"
+   VerbosePrint "################################################################################\n"
+   VerbosePrint "The input will include the following keywords.\n"
+   for keyword in "${ConfiguredKeywords[@]}" ; do
+      VerbosePrint "${keyword}: $(echo "${ConfiguredKeywordsValues[${keyword}]//|/, }" | sed "s/_/ /g")\n"
+      if echo "${ConfiguredKeywordsValues[${keyword}]}" | grep -q \| ; then
+         local dummy=${ConfiguredKeywordsValues[${keyword}]//[^|]}
+         NumberOfCompinations=$((${NumberOfCompinations} * (${#dummy} + 1) ))
+         MultKeywords+=( ${keyword} )
+         unset dummy
+      fi
+   done
+   unset keyword
+   VerbosePrint "################################################################################\n"
+}
+
+function DefineCompinationDirectory {
+   local dummy
+   local variable="projectile"
+   [ ${CurrentMultKeywordValue[${variable}]} ] && dummy=${CurrentMultKeywordValue[${variable}]} || dummy=${ConfiguredKeywordsValues[${variable}]}
+   CompinationWorkDir="${dummy}-"
+   variable="alphaomp"
+   [ ${CurrentMultKeywordValue[${variable}]} ] && dummy=${CurrentMultKeywordValue[${variable}]} || dummy=${ConfiguredKeywordsValues[${variable}]}
+   [ ! ${dummy} ] && dummy="0"
+   CompinationWorkDir+="a${dummy}"
+   variable="jlmomp"
+   [ ${CurrentMultKeywordValue[${variable}]} ] && dummy=${CurrentMultKeywordValue[${variable}]} || dummy=${ConfiguredKeywordsValues[${variable}]}
+   [ ! ${dummy} ] && dummy="0"
+   CompinationWorkDir+="p${dummy}"
+   variable="ldmodel"
+   [ ${CurrentMultKeywordValue[${variable}]} ] && dummy=${CurrentMultKeywordValue[${variable}]} || dummy=${ConfiguredKeywordsValues[${variable}]}
+   [ ! ${dummy} ] && dummy="0"
+   CompinationWorkDir+="l${dummy}"
+   variable="strength"
+   [ ${CurrentMultKeywordValue[${variable}]} ] && dummy=${CurrentMultKeywordValue[${variable}]} || dummy=${ConfiguredKeywordsValues[${variable}]}
+   [ ! ${dummy} ] && dummy="0"
+   CompinationWorkDir+="s${dummy}"
+   variable="strengthm1"
+   [ ${CurrentMultKeywordValue[${variable}]} ] && dummy=${CurrentMultKeywordValue[${variable}]} || dummy=${ConfiguredKeywordsValues[${variable}]}
+   [ ! ${dummy} ] && dummy="0"
+   CompinationWorkDir+="m${dummy}"
+   variable="astro"
+   [ ${CurrentMultKeywordValue[${variable}]} ] && dummy=${CurrentMultKeywordValue[${variable}]} || dummy=${ConfiguredKeywordsValues[${variable}]}
+   [ "${dummy}" == "n" ] && unset dummy
+   [ ${dummy} ] && dummy="-rr"
+   CompinationWorkDir+="${dummy}"
+   variable="astrogs"
+   [ ${CurrentMultKeywordValue[${variable}]} ] && dummy=${CurrentMultKeywordValue[${variable}]} || dummy=${ConfiguredKeywordsValues[${variable}]}
+   [ "${dummy}" == "n" ] && unset dummy
+   [ ${dummy} ] && dummy="gs"
+   CompinationWorkDir+="${dummy}"
+   local key
+   for key in ${MultKeywords[@]} ; do
+      [ "${key}" == "projectile" ] || [ "${key}" == "alphaomp" ] || [ "${key}" == "jlmomp" ] || [ "${key}" == "ldmodel" ] || [ "${key}" == "strength" ] || [ "${key}" == "strengthm1" ] || [ "${key}" == "astro" ] || [ "${key}" == "astrogs" ] && continue
+      CompinationWorkDir+="-${key}_$(echo ${CurrentMultKeywordValue[${key}]} | sed "s| |_|g")"
+   done
+
+   CompinationWorkDir="${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/${CompinationWorkDir}"
+   VerbosePrint "####\tPreparing to process compination ${CurrentCompinationIndex} of ${NumberOfCompinations}\n"
+   if [ ! -d ${CompinationWorkDir} ] ; then
+      mkdir -p ${CompinationWorkDir}
+      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating folder $(basename ${CompinationWorkDir})\n"
+   else
+      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Folder $(basename ${CompinationWorkDir}) already exists!!!\n"
+   fi
+
+   unset dummy
+   unset variable
+   unset key
+}
+
+function MakeCompinationInput {
+   local CompinationInputFile="${CompinationWorkDir}/input"
+   if [ -f ${CompinationInputFile} ] ; then
+      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Input file in $(basename ${CompinationWorkDir}) already exists!!!\n"
+      if [ ${ForceRunTalys} ] ; then
+         VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Force running talys... erasing input file in $(basename ${CompinationWorkDir})!!!\n"
+         find ${CompinationWorkDir} -type f -exec rm -f {} +
+      else
+         CompinationInputFile+="-new"
+      fi
+   fi
+   local key
+   VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating input file $(basename ${CompinationInputFile}) in $(basename ${CompinationWorkDir})\n"
+   echo "mass ${NucleusA}" > ${CompinationInputFile}
+   echo "element ${NucleusSymbol}" >> ${CompinationInputFile}
+   for key in ${ConfiguredKeywords[@]} ; do
+      local keyvalue
+      [ "${CurrentMultKeywordValue[${key}]}" ] && keyvalue=${CurrentMultKeywordValue[${key}]} || keyvalue=${ConfiguredKeywordsValues[${key}]}
+      echo "${key} ${keyvalue}" >> ${CompinationInputFile}
+      unset keyvalue
+   done
+   unset CompinationInputFile
+   unset key
+}
+
+function CheckIfNeedToRunTalys {
+   diff input input-new >/dev/null 2>&1
+   if [ $? -ne 0 ] ; then
+      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Different input file from previous run. Rerunning talys Calculations!!!\n"
+   else
+      if [ -f output ] ; then
+         if grep -q successful output ; then
+            VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Same input file and completed previous run. Nothing to do!!!\n"
+            return
+         fi
+      fi
+      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Same input file but incomplet previous run. Rerunning talys Calculations!!!\n"
+   fi
+   find . ! -name 'input-new' -type f -exec rm -f {} +
+   mv input-new input
+}
+
+function RunTalys {
+   (
+      while [[ "`ps -au ${USER}  | grep talys | wc -l`" -ge "${NumberOfWorkingThreads}" ]] ; do sleep 1 ; done
+      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+      ${TalysExecutable} < input > output
+      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Finished running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+   ) &
+}
+
+function RunTalysCompination {
+   local originalDir=$(pwd)
+   cd "${CompinationWorkDir}"
+   [ -f input-new ] && CheckIfNeedToRunTalys
+   if [ -f input-new ] ; then
+      rm -f input-new
+   else
+      RunTalys
+   fi
+   cd "${originalDir}"
+   unset originalDir
+}
+
+function PrepareAndRunRatios {
+   (
+      local enum
+      while [[ ! $(grep "${CurrentCompinationIndex}\/${NumberOfCompinations}.*Finished.*${TalysExecutable}.*$(basename ${CompinationWorkDir}).*${NucleusA}${NucleusSymbol}" ${LogFile} ) ]] ; do sleep 1 ; done
+      for numeratorFile in ${Ratios[0]//|/ } ; do
+         [ ! -e "${CompinationWorkDir}/${numeratorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Numerator file ${numeratorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
+         for denominatorFile in ${Ratios[1]//|/ } ; do
+            [ ! -e "${CompinationWorkDir}/${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Denominator file ${denominatorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
+            local RatioCalcDir="${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/ratios/$(basename ${CompinationWorkDir})"
+            [ ! -d ${RatioCalcDir} ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating ratio folder ${RatioCalcDir}\n" && mkdir -p ${RatioCalcDir}
+            VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Calculating ratio ${numeratorFile} over ${denominatorFile} in ${RatioCalcDir}\n"
+            ratio "${CompinationWorkDir}/${numeratorFile}" "${CompinationWorkDir}/${denominatorFile}" > "${RatioCalcDir}/${numeratorFile}_over_${denominatorFile}"
+            unset RatioCalcDir
+         done
+      done
+      unset numeratorFile
+      unset denominatorFile
+   ) &
+}
+
+function loopMultiKeywords {
+   local keys="$@"
+   local key
+   for key in ${keys[@]} ; do
+      for keyvalue in ${ConfiguredKeywordsValues[${key}]//|/ } ; do
+         CurrentMultKeywordValue[${key}]=$(echo ${keyvalue} | sed "s|_| |g")
+         if [ "${key}" != "${MultKeywords[-1]}" ] ; then
+            loopMultiKeywords ${keys#*${key}} 
+         else
+            DefineCompinationDirectory
+            if [ ${RunTalysFlag} ] ; then
+               MakeCompinationInput
+               RunTalysCompination
+            fi
+            [ ${Ratios} ] && PrepareAndRunRatios
+            CurrentCompinationIndex=$((${CurrentCompinationIndex}+1))
+         fi
+      done
+      return
+   done
+   unset keys
+   unset key
+   unset keyvalue
+}
+
+function PrepareAndRunTalys {
+   [ ! ${RunTalysFlag} ] && [ ! ${Ratios} ] && VerbosePrint "Skipping running talys calculations in ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}\n" && return
+   VerbosePrint "Preparing to run ${NumberOfCompinations} talys calculations\n"
+   declare -A CurrentMultKeywordValue
+   CurrentCompinationIndex=1
+   loopMultiKeywords ${MultKeywords[@]}
+   unset CurrentCompinationIndex
+}
+
+declare -A LongOptions
+declare -A OptionHelp
+
+ShortOptions="h"
+LongOptions[help]="h"
+OptionHelp[h]="display this help and exit"
+function argR[h] {
+   print_usage
+   ScriptExit 0
+}
+
+ShortOptions+="v"
+LongOptions[verbose]="v"
+OptionHelp[v]="increase the information printed"
+function argR[v] {
+   VerboseOutput=1
+}
+
+ShortOptions+="f"
+LongOptions[force]="f"
+OptionHelp[f]="force run talys even if files exist"
+function argR[f] {
+   ForceRunTalys=1
+}
+
+ShortOptions+="t:"
+LongOptions[parallel-jobs]="t"
+OptionHelp[t]="set nb of parallel jobs\nNOTE: default value is $((`nproc`-2))"
+function argR[t] {
+   NumberOfWorkingThreads=${OPTARG}
+   [[ ${NumberOfWorkingThreads} =~ ^[0-9]+$ ]] || ScriptExit 2
+   [[ ${NumberOfWorkingThreads} -lt 1 || ${NumberOfWorkingThreads} -gt `nproc` ]] && ScriptExit 3
+   VerbosePrint "You have asked for ${NumberOfWorkingThreads} parallel jobs.\n"
+}
+
+ShortOptions+="c"
+LongOptions[cm]="c"
+OptionHelp[c]="set if data are given in center of mass system.\nNOTE: default value is Lab\nNOTE: It is used only in the case of chi square calculations and the masses files must be availiable."
+function argR[c] {
+   Set_cmFlag
+}
+
+declare -A ConfigOptionsSetText
+declare -A ConfigOptionsSettedValue
+
+ConfigOptions=( "RunTalysFlag" )
+ConfigOptionsSetText[RunTalysFlag]="Run Talys y/n"
+ConfigOptionsSettedValue[RunTalysFlag]="n"
+
+ConfigOptions+=( "TalysVersions" )
+ConfigOptionsSetText[TalysVersions]="Give Talys Versions (see notes above)"
+ConfigOptionsSettedValue[TalysVersions]="1.96"
+
+ConfigOptions+=( "RangesFlag" )
+ConfigOptionsSetText[RangesFlag]="Calculate Ranges y/n"
+ConfigOptionsSettedValue[RangesFlag]="n"
+
+ConfigOptions+=( "ChiFlag" )
+ConfigOptionsSetText[ChiFlag]="Calculate Chi y/n"
+ConfigOptionsSettedValue[ChiFlag]="n"
+
+ConfigOptions+=( "PartialRanges" )
+ConfigOptionsSetText[PartialRanges]="Calculate Partial Ranges (optional)"
+ConfigOptionsSettedValue[PartialRanges]="1n++8 +y+43"
+
+ConfigOptions+=( "Ratios" )
+ConfigOptionsSetText[Ratios]="Calculate ratio (numerators / denominators) (both can be more than one)"
+ConfigOptionsSettedValue[Ratios]="rp035080.L00 / rp035080.tot"
+
+ConfigOptions+=( "ElAngDistFlag" )
+ConfigOptionsSetText[ElAngDistFlag]="Calculate elastic angular distributions (y/n, ONLY ONE) (optional, default n)"
+ConfigOptionsSettedValue[ElAngDistFlag]="n"
+
+declare -A InputFileOptionsSetText
+declare -A InputFileOptionsSettedValue
+declare -A InputFileOptionsKeywords
+
+InputFileOptions=( "Nuclei" )
+InputFileOptionsSetText[Nuclei]="Give Nuclei (In either form 78Se Se78) (can be more than one)"
+InputFileOptionsSettedValue[Nuclei]="Se78"
+
+InputFileOptions+=( "Projectiles" )
+InputFileOptionsSetText[Projectiles]="Give projectile (can be more than one of n p d t h a g)"
+InputFileOptionsSettedValue[Projectiles]="p a"
+InputFileOptionsKeywords[Projectiles]="projectile"
+
+InputFileOptions+=( "AlphaOmps" )
+InputFileOptionsSetText[AlphaOmps]="Give alphaomps (valid alpha OMP number) (optional, can be empty or more)"
+InputFileOptionsSettedValue[AlphaOmps]="1 2"
+InputFileOptionsKeywords[AlphaOmps]="alphaomp"
+
+InputFileOptions+=( "jlmOmp" )
+InputFileOptionsSetText[jlmOmp]="jlmomp (y/n) (optional, can be empty or more)"
+InputFileOptionsSettedValue[jlmOmp]="y n"
+InputFileOptionsKeywords[jlmOmp]="jlmOmp"
+
+InputFileOptions+=( "ldModels" )
+InputFileOptionsSetText[ldModels]="Give ldmodels (valid ldmodels number) (optional, can be empty or more)"
+InputFileOptionsSettedValue[ldModels]="5 6"
+InputFileOptionsKeywords[ldModels]="ldmodel"
+
+InputFileOptions+=( "Strengths" )
+InputFileOptionsSetText[Strengths]="Give strengths (valid strengths number) (optional, can be empty or more)"
+InputFileOptionsSettedValue[Strengths]="1 3 7"
+InputFileOptionsKeywords[Strengths]="strength"
+
+InputFileOptions+=( "StrengthsM1" )
+InputFileOptionsSetText[StrengthsM1]="Give strengthsM1 (valid strengthsM1 number) (optional, can be empty or more)"
+InputFileOptionsSettedValue[StrengthsM1]="1 3 8"
+InputFileOptionsKeywords[StrengthsM1]="strengthm1"
+
+InputFileOptions+=( "Energy" )
+InputFileOptionsSetText[Energy]="Give energy range and step (in MeV, it has to be <Min> <Max> <step>) or single energy"
+InputFileOptionsSettedValue[Energy]="4 11 .5"
+InputFileOptionsKeywords[Energy]="energy"
+
+InputFileOptions+=( "Cbreakp" )
+InputFileOptionsSetText[Cbreakp]="Give Cbreak p (optional, ONLY ONE)"
+InputFileOptionsSettedValue[Cbreakp]=" "
+InputFileOptionsKeywords[Cbreakp]="cbreak p"
+
+InputFileOptions+=( "Cbreakn" )
+InputFileOptionsSetText[Cbreakn]="Give Cbreak n (optional, ONLY ONE)"
+InputFileOptionsSettedValue[Cbreakn]=" "
+InputFileOptionsKeywords[Cbreakn]="cbreak n"
+
+InputFileOptions+=( "transeps" )
+InputFileOptionsSetText[transeps]="Give transeps (optional, ONLY ONE)"
+InputFileOptionsSettedValue[transeps]=" "
+InputFileOptionsKeywords[transeps]="transeps"
+
+InputFileOptions+=( "popeps" )
+InputFileOptionsSetText[popeps]="Give popeps (optional, ONLY ONE)"
+InputFileOptionsSettedValue[popeps]=" "
+InputFileOptionsKeywords[popeps]="popeps"
+
+InputFileOptions+=( "xseps" )
+InputFileOptionsSetText[xseps]="Give xseps (optional, ONLY ONE)"
+InputFileOptionsSettedValue[xseps]=" "
+InputFileOptionsKeywords[xseps]="xseps"
+
+InputFileOptions+=( "isomer" )
+InputFileOptionsSetText[isomer]="Give isomer (optional, ONLY ONE)"
+InputFileOptionsSettedValue[isomer]=" "
+InputFileOptionsKeywords[isomer]="isomer"
+
+InputFileOptions+=( "astro" )
+InputFileOptionsSetText[astro]="astro y/n (can be more than one) (optional, default n)"
+InputFileOptionsSettedValue[astro]="n"
+InputFileOptionsKeywords[astro]="astro"
+
+InputFileOptions+=( "astrogs" )
+InputFileOptionsSetText[astrogs]="astrogs y/n (can be more than one) (optional, default n)"
+InputFileOptionsSettedValue[astrogs]="n"
+InputFileOptionsKeywords[astrogs]="astrogs"
+
+for arg in "$@"; do
+   shift
+   ARG=${arg%=*}
+   ARG2=${arg#*=}
+   ARG2=${ARG2/${ARG}/}
+   ARG=${ARG/--/}
+   if [[ -n "${LongOptions[${ARG}]}" ]] ; then
+      set -- "$@" "-${LongOptions[${ARG}]}"
+      if [[ -n "${ARG2}" ]] ; then
+         set -- "$@" "${ARG2}"
+      fi
+   else
+      set -- "$@" "${arg}"
+   fi
+
+   unset ARG
+   unset ARG2
+done
+unset arg
+
+OPTIND=1
+while getopts ${ShortOptions} opt ; do
+   case "${opt}" in
+      [^?]*) 
+         argR[${opt}]
+      ;;
+      '?')
+         ScriptExit 1
+      ;;
+   esac
+done
+shift $(expr $OPTIND - 1) # remove options from positional parameters
+unset OPTIND
+unset opt
+
+[[ ${#@} > 1 ]] && ScriptExit 4
+
+SetTalysWorkDir
+
+[[ ${#@} == 0 ]] && CreateSampleInput
+
+UserInputFileName="$1"
+ConfiguredKeywords=()
+declare -A ConfiguredKeywordsValues
+declare -a MultKeywords
+declare NumberOfCompinations=1
+ReadInputFile
+unset UserInputFileName
+
+for TalysVersion in ${TalysVersions[@]//|/ } ; do
+   [ "${TalysVersion}" == "default" ] && TalysExecutable=talys || TalysExecutable=talys-${TalysVersion}
+   for Nucleus in ${Nuclei[@]} ; do
+      NucleusA=$(echo ${Nucleus} | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" )
+      NucleusSymbol=$(echo ${Nucleus} | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/")
+      VerbosePrint "Preparing to process isotope ${NucleusA}${NucleusSymbol} for talys version ${TalysVersion}\n"
+      [ ! -d ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol} ] && mkdir -p ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol} && VerbosePrint "Created folder ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}\n"
+      PrepareAndRunTalys
+      VerbosePrint "################################################################################\n"
+   done
+   unset Nucleus
+   unset NucleusA
+   unset NucleusSymbol
+done
+unset TalysVersion
+unset TalysExecutable
+unset MultKeywords
+unset NumberOfCompinations
+
+wait
+VerbosePrint "################################################################################\n"
+VerbosePrint "Finished running $(basename $0) for input ${InputFileName}, run ${InputRunNumber}\n"
+
+unset NumberOfWorkingThreads
+unset CurWorkDir
+unset ShortOptions
+unset LongOptions
+unset OptionHelp
+unset VerboseOutput
+unset ForceRunTalys
+unset cmFlag
+unset massesDir
+unset InputFileName
+unset InputWorkDir
+unset LogFile
+unset InputRunNumber
+unset ConfigOptions
+unset ConfigOptionsSetText
+unset ConfigOptionsSettedValue
+unset InputFileOptions
+unset InputFileOptionsSetText
+unset InputFileOptionsSettedValue
+
+ScriptExit 0
+
+
+
+
+function RunCalculateChi {
+   if [ "${pc_type}" == "cluster" ] ; then
+      echo "chi_calc ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile} ; rm -f ${LogDir}/chi2-${expfile}*" | qsub -cwd -V -j y -o ${LogDir} -N chi2-${expfile}
+   else
+      chi_calc ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile}
+   fi
+}
+
+function RunCalculateRanges {
+   rangeFolder=$1
+   rangeFile=$2
+   initialFiles=$3
+   while read line ; do
+      ener=$(echo ${line} | cut -f1 -d' ')
+      min=$(echo ${line} | cut -f2 -d' ')
+      max=$(echo ${line} | cut -f3 -d' ')
+      if [[ "${min}" == "${max}" ]] ; then continue ; fi
+      minfiles=$(grep "${ener}.*${min}" ${projectile}-*/${initialFiles} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+      maxfiles=$(grep "${ener}.*${max}" ${projectile}-*/${initialFiles} | sed "s/\(.*\)\/\(.*\)/\1/" | tr '\n' ' ' ) #"
+      sed -i "/^\ *${line}/c\ ${line} MINIMUM IN ${minfiles} MAXIMUM IN ${maxfiles}" ${rangeFolder}/${rangeFile}
+   done < ${rangeFolder}/${rangeFile} &
+   unset initialFiles
+   unset rangeFile
+   unset rangeFolder
+}
+
+function Define_Dir {
+   unset rr
+   unset rrgs
+   if [ "${ast}" == "y" ] ; then rr="-rr" ; fi
+   if [ "${astgs}" == "y" ] ; then rrgs="gs" ; fi
+   TalysCalcDir=${InputWorkDir}/Talys-${talys_version}/${mass}${element}/${projectile}-${alpha_omp}${jlm_omp}${ld_model}${strength}
+   qsubLogFileName="talys-${talys_version}_${mass}${element}_${projectile}-${alpha_omp}${jlm_omp}${ld_model}${strength}"
+   if [ ${add_keywords} ] ; then
+      for (( i=0; i<${#add_keywords[@]}; i++ )) ; do
+         TalysCalcDir=${TalysCalcDir}-$(eval echo "\${${add_keywords[$i]}_line}" | sed "s/<.*>/${keywords_values[$i]}/" | sed "s/\ /_/g" | sed "s/adjust//g" | sed "s/_${projectile}//g")
+         qsubLogFileName="${qsubLogFileName}-$(eval echo "\${${add_keywords[$i]}_line}" | sed "s/<.*>/${keywords_values[$i]}/" | sed "s/\ /_/g" | sed "s/adjust//g" | sed "s/_${projectile}//g")"
+      done
+   fi
+   TalysCalcDir=${TalysCalcDir}${rr}${rrgs}
+   qsubLogFileName="${qsubLogFileName}${rr}${rrgs}"
+}
+
+function CalculateRanges {
+   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
+      echo "Calculating ranges for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFile}
+      if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/Ranges ] ; then
+         rm -rf ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/Ranges/${projectile}-ranges-*
+      else
+         mkdir -p ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/Ranges
+      fi
+      rrgsFiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/${projectile}-*rrgs/astrorate.* 2>/dev/null)
+      if [ ${rrgsFiles} ] ; then for rrgsFile in ${rrgsFiles[@]} ; do mv rrgsFile rrgsFile_gs ; done ; fi
+      unset rrgsFiles
+      cd ${InputWorkDir}/Talys-${talys_version}/${mass}${element}
+#      rpfiles=$(ls ${projectile}-*/rp*.* ${projectile}-*/astrorate.* 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+      rpfiles=$(find ./ -iwholename \*${projectile}-\*/rp\*.\* -or -iwholename \*${projectile}-\*/astrorate.\* 2>/dev/null | sed "s/.*\/\(.*\)/\1/g" | sort -u -t/ ) #"
+      for rpfile in ${rpfiles[@]} ; do
+         sort -g -k2 ${projectile}-*/${rpfile} | sed "/#/d" | cut -f1-3 -d' ' | sort -g -u > Ranges/min-ranges-${rpfile}
+         sort -g -k2 -r ${projectile}-*/${rpfile} | sed "/#/d" | cut -f1-3 -d' ' | sort -g -u > Ranges/max-ranges-${rpfile}
+         paste -d' ' Ranges/min-ranges-${rpfile} - <<< $(cut -f3 -d' ' Ranges/max-ranges-${rpfile}) > Ranges/${projectile}-ranges-${rpfile}
+         rm -f Ranges/min-ranges-${rpfile} Ranges/max-ranges-${rpfile}
+         RunCalculateRanges Ranges "${projectile}-ranges-${rpfile}" "${rpfile}"
+      done
+      wait
+      unset rpfiles
+   fi
+}
+
+function CalculateRatiosRanges {
+   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
+      echo "Calculating ranges of ratios for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFile}
+      for ratioDir in ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/ratio_* ; do
+         if [ -d ${ratioDir}/Ranges ] ; then
+            rm -rf ${ratioDir}/Ranges/*
+         else
+            mkdir -p ${ratioDir}/Ranges
+         fi
+         cd ${ratioDir}
+         rpfiles=$(ls ${projectile}-*/ratioOut 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+         for rpfile in ${rpfiles[@]} ; do
+            sort -g -k2 ${projectile}-*/${rpfile} | sed "/#/d" | cut -f1-3 -d' ' | sort -g -u > Ranges/min-ranges-${rpfile}
+            sort -g -k2 -r ${projectile}-*/${rpfile} | sed "/#/d" | cut -f1-3 -d' ' | sort -g -u > Ranges/max-ranges-${rpfile}
+            paste -d' ' Ranges/min-ranges-${rpfile} - <<< $(cut -f3 -d' ' Ranges/max-ranges-${rpfile}) > Ranges/${projectile}-ranges-${rpfile}
+            rm -f Ranges/min-ranges-${rpfile} Ranges/max-ranges-${rpfile}
+            RunCalculateRanges Ranges "${projectile}-ranges-${rpfile}" "${rpfile}"
+         done
+         unset rpfiles
+      done
+      wait
+   fi
+}
+
+function CalculatePartialRanges {
+   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
+      echo "Calculating partial ranges for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFile}
+      myparRanges=$(echo ${partial_ranges[@]} | sed "s/\ /\_/g")
+      if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges} ] ; then
+         rm -rf ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/${projectile}-ranges-*
+      else
+         mkdir -p ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}
+      fi
+      for parv in ${partial_ranges[@]} ; do
+         string=${string}"${projectile}-${parv}/rp*.* ${projectile}-${parv}-rr/astrorate.* "
+      done
+      cd ${InputWorkDir}/Talys-${talys_version}/${mass}${element}
+      rpfiles=$(ls $(echo ${string} | sed "s/\+/\*/g") 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
+      kkrpfiles=$(ls $(echo ${string} | sed "s/\+/\*/g") 2>/dev/null | sort -u )
+echo "|`pwd`|${string}|${rpfiles[@]}|${kkrpfiles[@]}|"
+      for rpfile in ${rpfiles[@]} ; do
+         sort -g -k2 ${projectile}-*/${rpfile} | sed "/#/d" | cut -f1-3 -d' ' | sort -g -u > PartialRanges_${myparRanges}/min-ranges-${rpfile}
+         sort -g -k2 -r ${projectile}-*/${rpfile} | sed "/#/d" | cut -f1-3 -d' ' | sort -g -u > PartialRanges_${myparRanges}/max-ranges-${rpfile}
+         paste -d' ' PartialRanges_${myparRanges}/min-ranges-${rpfile} - <<< $(cut -f3 -d' ' PartialRanges_${myparRanges}/max-ranges-${rpfile}) > PartialRanges_${myparRanges}/${projectile}-ranges-${rpfile}
+         rm -f PartialRanges_${myparRanges}/min-ranges-${rpfile} PartialRanges_${myparRanges}/max-ranges-${rpfile}
+         RunCalculateRanges "PartialRanges_${myparRanges}" "${projectile}-ranges-${rpfile}" "${rpfile}"
+      done
+      wait
+      unset rpfiles
+      unset string
+   fi
+}
+
+function CalculateChi {
+   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
+      echo "Calculating chi2 for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFile}
+      if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2 ] ; then
+         rm -rf ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/*
+      else
+         mkdir -p ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2
+      fi
+      expfiles=$(ls ${TalysWorkDir}/data/${mass}${element}/* 2>/dev/null | sed "s/.*\/.*${element}\/\(.*\)/\1/g") #"
+      ztar=$(grep ${mass}${element} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
+      mtar=$(grep ${mass}${element} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
+      for expfile in ${expfiles[@]} ; do
+         reaction=$(echo ${expfile} | sed "s/.*\_\([pan][gnpa]\)\_.*/\1/g") #"
+	 expfilestate=$(echo ${expfile} | grep -oh [Lt][o0-9][t0-9])
+         case ${reaction} in
+            pg ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+1))*.${expfilestate} 2>/dev/null) ; beam=p ;;
+            pn ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=p ;;
+            pp ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=p ;;
+            pa ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-1))*$(($mass-3))*.${expfilestate} 2>/dev/null) ; beam=p ;;
+            ag ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+2))*$(($mass+4))*.${expfilestate} 2>/dev/null) ; beam=a ;;
+            an ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+2))*$(($mass+3))*.${expfilestate} 2>/dev/null) ; beam=a ;;
+            ap ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+3))*.${expfilestate} 2>/dev/null) ; beam=a ;;
+            aa ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=a ;;
+            ng ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+1))*.${expfilestate} 2>/dev/null) ; beam=n ;;
+            nn ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=n ;;
+            np ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-1))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=n ;;
+            na ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-2))*$(($mass-3))*.${expfilestate} 2>/dev/null) ; beam=n ;;
+         esac
+         for csfile in ${csfiles[@]} ; do
+            RunCalculateChi
+         done
+         unset csfiles
+         unset beam
+      done
+      unset expfiles
+   fi
+}
+
+
+
+if [ ! $1 ] ; then
+else
+   
+   for talys_version in ${talys_versions[@]} ; do
+      massesDir=$(find ${find_dir} -name "audi" 2>/dev/null | grep $(echo ${talys_version} | sed "s/\.//"))
+      for nucleus in ${nuclei[@]} ; do
+         mass=$(echo ${nucleus} | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" ) #"
+         element=$(echo ${nucleus} | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/") #"
+         for projectile in ${projectiles[@]} ; do
+            for alpha_omp in ${alpha_omps[@]} ; do
+               for jlm_omp in ${jlm_omps[@]} ; do
+                  for ld_model in ${ld_models[@]} ; do
+                     for strength in ${strengths[@]} ; do
+                        for ast in ${astro[@]} ; do
+                           for astgs in ${astrogs[@]} ; do
+                              if [ ! "${ast}" == "y" ] && [ "${astgs}" == "y" ] ; then break ; fi
+                              declare -a keywords_values
+                              iterate_on_additional_keywords "" 0
+                              unset keywords_values
+#   Finishing do on astrogs
+                           done
+#   Finishing do on astro
+                        done
+#   Finishing do on strengths
+                     done
+#   Finishing do on ld_models
+                  done
+#   Finishing do on jlm_omps
+               done
+#   Finishing do on alpha_omps
+            done
+            qsubPrefix="talys-${talys_version}_${mass}${element}_${projectile}"
+            if [ "${pc_type}" == "cluster" ] ; then
+               while true ; do
+                  if qstat -j "${qsubPrefix}*" 2> /dev/null | grep ${qsubPrefix} &> /dev/null ; then
+                     sleep 10s
+                  else
+                     if [ "${ranges_flag}" == "y" ] ; then
+                        CalculateRanges
+                        if [ ${ratio} ] ; then CalculateRatiosRanges ; fi
+                     fi
+                     if [ ${partial_ranges} ] ; then CalculatePartialRanges ; fi
+                     if [ "${chi_flag}" == "y" ] ; then CalculateChi ; fi
+                     break
+                  fi
+               done &
+            else
+               wait
+               if [ "${ranges_flag}" == "y" ] ; then
+                  CalculateRanges
+                  if [ ${ratio} ] ; then CalculateRatiosRanges ; fi
+               fi
+               if [ ${partial_ranges} ] ; then CalculatePartialRanges ; fi
+               if [ "${chi_flag}" == "y" ] ; then CalculateChi ; fi
+               wait
+            fi
+#   Finishing do on projectiles
+         done
+#   Finishing do on nuclei
+      done
+#   Finishing do on talys_versions
+   done
+
+   if [ "${talys_flag}" == "y" ] && [ -e ${InputWorkDir}/energies.$$ ] ; then rm -f ${InputWorkDir}/energies.$$ ; fi
+fi
+
+wait
+
+exit 0
