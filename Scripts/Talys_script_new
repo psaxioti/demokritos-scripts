@@ -113,10 +113,9 @@ END_OF_HELP
 
 function Set_cmFlag {
    find_dir="/usr/share/"
-   find_dir="${find_dir}$(ls ${find_dir} | grep talys | sort | tail -1)"
+   find_dir="$(find ${find_dir} -iname talys* -print 2>/dev/null | sort | tail -1)"
    [ -d ${find_dir} ] || find_dir="${HOME}"
-   massesDir=$(find ${find_dir} -name "ame2020" -print -quit 2>/dev/null)
-   [ -d "${massesDir}" ] || massesDir=$(find ${find_dir} -name "audi" -print -quit 2>/dev/null)
+   massesDir=$(find ${find_dir} \( -iname "ame2020" -or -iname "audi" \) -print -quit 2>/dev/null)
    [ -d "${massesDir}" ] && VerbosePrint "The masses files used for cm calculations are located in folder ${massesDir}\n"
    [ -d "${massesDir}" ] || ScriptExit 5
    unset find_dir
@@ -494,6 +493,7 @@ function PrepareAndRunRatios {
          [ ! -e "${CompinationWorkDir}/${numeratorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Numerator file ${numeratorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
          for denominatorFile in ${Ratios[1]//|/ } ; do
             [ ! -e "${CompinationWorkDir}/${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Denominator file ${denominatorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
+            [ "${numeratorFile}" == "${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Identical numerator and denominator file ${denominatorFile}. Skipping ratio calculation!!!\n" && continue
             local RatioCalcDir="${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/Ratios/$(basename ${CompinationWorkDir})"
             [ ! -d ${RatioCalcDir} ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating ratio folder ${RatioCalcDir}\n" && mkdir -p ${RatioCalcDir}
             VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Calculating ratio ${numeratorFile} over ${denominatorFile} in ${RatioCalcDir}\n"
@@ -550,27 +550,29 @@ function PrepareAndRunTalys {
 function RunCalculateRanges {
    local RangesSearchFolder=${1}
    local RangesFolder=${2}
-   local SearchPattern=${3}
-   local Description=${4}
+   local RangesFolderPattern=${3}
+   local RangesFilePattern=${4}
+   local Description=${5}
    [ -d "${RangesSearchFolder}" ] && [ ! -d "${RangesFolder}" ] && mkdir -p ${RangesFolder} && VerbosePrint "Created ${Description} folder ${RangesFolder}\n"
    [ ! -d "${RangesFolder}" ] && return
    rm -rf ${RangesFolder}/*-ranges
    local proj
    for proj in $(ls ${RangesSearchFolder} | sed "s|^\([a-z]\)-.*|\1|" | sed "s|[a-z][a-z]\+||" | sort -u) ; do
       local rangeFiles
-      rangeFiles=$(eval "find ${RangesSearchFolder} \( ${SearchPattern} \) -exec basename {} \;" | sort -u)
+      local HelperRangeFolder="*${RangesSearchFolder}/${proj}-"
+      rangeFiles=`find ${RangesSearchFolder} \( -ipath ${HelperRangeFolder}${RangesFolderPattern// /* -or -ipath ${HelperRangeFolder}}* \) \( -iname ${RangesFilePattern// / -or -iname } \) -exec basename {} \; | sort -u`
       local file
       for file in ${rangeFiles} ; do
          VerbosePrint "Calculating ${Description} for file ${proj}-${file} in folder ${RangesFolder//${InputWorkDir}\/}\n"
          rm -rf ${RangesFolder}/${proj}-${file}-ranges*
-         cat ${RangesSearchFolder}/${proj}-*/${file} > ${RangesFolder}/${proj}-${file}-ranges-dum
+         find ${RangesSearchFolder} \( -ipath ${HelperRangeFolder}${RangesFolderPattern// /* -or -ipath ${HelperRangeFolder}}* \) \( -iname ${file} \) -exec cat {} >> ${RangesFolder}/${proj}-${file}-ranges-dum \;
          sed -i "/#/d" ${RangesFolder}/${proj}-${file}-ranges-dum
          sed -i "s|^[[:blank:]]*||g" ${RangesFolder}/${proj}-${file}-ranges-dum
          cut -f1-2 -d' ' ${RangesFolder}/${proj}-${file}-ranges-dum > ${RangesFolder}/${proj}-${file}-ranges
          sort -g -k2 ${RangesFolder}/${proj}-${file}-ranges | sort -g -u > ${RangesFolder}/${proj}-${file}-ranges-min
          sort -g -k2 -r ${RangesFolder}/${proj}-${file}-ranges | sort -g -u > ${RangesFolder}/${proj}-${file}-ranges-max
          paste -d' ' ${RangesFolder}/${proj}-${file}-ranges-min - <<< $(cut -f2 -d' ' ${RangesFolder}/${proj}-${file}-ranges-max) > ${RangesFolder}/${proj}-${file}-ranges
-         rm -rf ${RangesFolder}/${proj}-${file}-ranges-*
+         rm -rf "${RangesFolder}"/${proj}-${file}-ranges-*
          local line
          while read line ; do
             local ener=$(echo ${line} | cut -f1 -d' ')
@@ -592,6 +594,7 @@ function RunCalculateRanges {
          VerbosePrint "Finished calculating ${Description} for file ${proj}-${file} in folder ${RangesFolder//${InputWorkDir}\/}\n"
       done
       unset rangeFiles
+      unset HelperRangeFolder
       unset file
    done
    unset proj
@@ -604,9 +607,10 @@ function RunCalculateRanges {
 function CalculateRanges {
    local searchFolder=${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}
    local rangesFolder=${searchFolder}/Ranges
-   local searchPattern='-iwholename *${NucleusA}${NucleusSymbol}/${proj}-*/[rx][ps]*.[tL][o0-9][t0-9] -or -iwholename *${NucleusA}${NucleusSymbol}/${proj}-*/astrorate.*'
+   local rangesFolderPatern="*"
+   local rangesFilePattern="[rx][ps]*.[tL][o0-9][t0-9] astrorate.*"
    local rangesDescription='ranges'
-   RunCalculateRanges "${searchFolder}" "${rangesFolder}" "${searchPattern}" "${rangesDescription}"
+   RunCalculateRanges "${searchFolder}" "${rangesFolder}" "${rangesFolderPatern}" "${rangesFilePattern}" "${rangesDescription}"
    unset searchFolder
    unset rangesFolder
    unset searchPattern
@@ -616,9 +620,10 @@ function CalculateRanges {
 function CalculateRatiosRanges {
    local searchFolder=${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/Ratios
    local rangesFolder=${searchFolder}/Ranges
-   local searchPattern='-iwholename *${searchFolder}/${proj}-*/*'
+   local rangesFolderPatern="*"
+   local rangesFilePattern="*"
    local rangesDescription='ratio ranges'
-   RunCalculateRanges "${searchFolder}" "${rangesFolder}" "${searchPattern}" "${rangesDescription}"
+   RunCalculateRanges "${searchFolder}" "${rangesFolder}" "${rangesFolderPatern}" "${rangesFilePattern}" "${rangesDescription}"
    unset searchFolder
    unset rangesFolder
    unset searchPattern
@@ -627,19 +632,129 @@ function CalculateRatiosRanges {
 
 function CalculatePartialRanges {
    local searchFolder=${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}
-   local rangesFolder=${searchFolder}/PartialRanges
-   local searchPattern='-iwholename *${NucleusA}${NucleusSymbol}/${proj}-*/[rx][ps]*.[tL][o0-9][t0-9] -or -iwholename *${NucleusA}${NucleusSymbol}/${proj}-*/astrorate.*'
+   local rangesFolder=${searchFolder}/PartialRanges/${PartialRanges[@]}
+   local rangesFolderPatern="${PartialRanges[@]//|/ }"
+   local rangesFilePattern="[rx][ps]*.[tL][o0-9][t0-9] astrorate.*"
    local rangesDescription='partial ranges'
-echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!||${PartialRanges}||"
-#   RunCalculateRanges "${searchFolder}" "${rangesFolder}" "${searchPattern}" "${rangesDescription}"
+   RunCalculateRanges "${searchFolder}" "${rangesFolder}" "${rangesFolderPatern}" "${rangesFilePattern}" "${rangesDescription}"
    unset searchFolder
    unset rangesFolder
    unset searchPattern
    unset rangesDescription
 }
 
-function CalculateChis {   
-   return
+function CalculateChis {
+   [ -d ${TalysWorkDir}/data/${NucleusA}${NucleusSymbol} ] && [ -d ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol} ] && VerbosePrint "Calculating chi2 for nucleus ${NucleusA}${NucleusSymbol} in folder ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/chi2\n" || return
+   [ ! -d ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/chi2 ] && mkdir -p ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/chi2
+   rm -rf ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/chi2/*
+   local expFiles=$(find "${TalysWorkDir}/data/${NucleusA}${NucleusSymbol}" -type f -iname *_[pan][gpan]_*.[tL][o0-9][t0-9])
+   local ztar=$(grep \ ${NucleusA}\  ${massesDir}/${NucleusSymbol}.mass | cut -f3 -d' ')
+   local mtar=$(grep \ ${NucleusA}\  ${massesDir}/${NucleusSymbol}.mass | cut -f8 -d' ')
+   local expfile
+   for expfile in ${expFiles[@]} ; do
+      local reaction=$(echo ${expfile} | sed "s/.*\_\([pan][gnpa]\)\_.*/\1/g") #"
+	   local expfilestate=$(echo ${expfile} | grep -oh [Lt][o0-9][t0-9])
+      local beam
+      local zDiff
+      local ADiff
+      local reaction_xsfile
+      local csfiles
+         case ${reaction} in
+            pg )
+               beam=p
+               zDiff=1
+               ADiff=1
+               reaction_xsfile=xs000000
+               ;;
+            pn )
+               beam=p
+               zDiff=1
+               ADiff=0
+               reaction_xsfile=xs100000
+               ;;
+            pp )
+               beam=p
+               zDiff=0
+               ADiff=0
+               reaction_xsfile=xs010000
+               ;;
+            pa )
+               beam=p
+               zDiff=-1
+               ADiff=-3
+               reaction_xsfile=xs000001
+               ;;
+            ag )
+               beam=a
+               zDiff=2
+               ADiff=4
+               reaction_xsfile=xs000000
+               ;;
+            an )
+               beam=a
+               zDiff=2
+               ADiff=3
+               reaction_xsfile=xs100000
+               ;;
+            ap )
+               beam=a
+               zDiff=1
+               ADiff=3
+               reaction_xsfile=xs010000
+               ;;
+            aa )
+               beam=a
+               zDiff=0
+               ADiff=0
+               reaction_xsfile=xs000001
+               ;;
+            ng )
+               beam=n
+               zDiff=0
+               ADiff=1
+               reaction_xsfile=xs000000
+               ;;
+            nn )
+               beam=n
+               zDiff=0
+               ADiff=0
+               reaction_xsfile=xs100000
+               ;;
+            np )
+               beam=n
+               zDiff=-1
+               ADiff=0
+               reaction_xsfile=xs010000
+               ;;
+            na )
+               beam=n
+               zDiff=-2
+               ADiff=-3
+               reaction_xsfile=xs000001
+               ;;
+         esac
+
+         csfiles=$(ls ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/${beam}-*/rp*$((${ztar}+${zDiff}))*$((${NucleusA}+${ADiff}))*.${expfilestate} 2>/dev/null)
+         csfiles+=" $(ls ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/${beam}-*/${reaction_xsfile}.${expfilestate} 2>/dev/null)"
+
+         local csfile
+         for csfile in ${csfiles[@]} ; do
+            [ ! ${cmFlag} ] && unset mtar && unset beam
+            chi_calc ${csfile} ${expfile} ${mtar} ${beam} >> ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/chi2/${reaction}-${expfile}-$(basename ${csfile})
+         done
+         unset csfile
+         unset csfiles
+         unset beam
+         unset reaction
+         unset expfilestate
+         unset zDiff
+         unset ADiff
+         unset reaction_xsfile
+      done
+      unset expFiles
+      unset expfile
+      unset mtar
+      unset ztar
 }
 
 declare -A LongOptions
@@ -911,81 +1026,3 @@ unset InputFileOptionsSetText
 unset InputFileOptionsSettedValue
 
 ScriptExit 0
-
-
-
-
-function RunCalculateChi {
-   if [ "${pc_type}" == "cluster" ] ; then
-      echo "chi_calc ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile} ; rm -f ${LogDir}/chi2-${expfile}*" | qsub -cwd -V -j y -o ${LogDir} -N chi2-${expfile}
-   else
-      chi_calc ${csfile} ${TalysWorkDir}/data/${mass}${element}/${expfile} ${mtar} ${beam} >> ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/${reaction}-${expfile}
-   fi
-}
-
-function CalculatePartialRanges {
-   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
-      echo "Calculating partial ranges for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFile}
-      myparRanges=$(echo ${partial_ranges[@]} | sed "s/\ /\_/g")
-      if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges} ] ; then
-         rm -rf ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}/${projectile}-ranges-*
-      else
-         mkdir -p ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/PartialRanges_${myparRanges}
-      fi
-      for parv in ${partial_ranges[@]} ; do
-         string=${string}"${projectile}-${parv}/rp*.* ${projectile}-${parv}-rr/astrorate.* "
-      done
-      cd ${InputWorkDir}/Talys-${talys_version}/${mass}${element}
-      rpfiles=$(ls $(echo ${string} | sed "s/\+/\*/g") 2>/dev/null | sort -k2 -u -t/ | sed "s/.*\/\(.*\)/\1/g") #"
-      kkrpfiles=$(ls $(echo ${string} | sed "s/\+/\*/g") 2>/dev/null | sort -u )
-echo "|`pwd`|${string}|${rpfiles[@]}|${kkrpfiles[@]}|"
-      for rpfile in ${rpfiles[@]} ; do
-         sort -g -k2 ${projectile}-*/${rpfile} | sed "/#/d" | cut -f1-3 -d' ' | sort -g -u > PartialRanges_${myparRanges}/min-ranges-${rpfile}
-         sort -g -k2 -r ${projectile}-*/${rpfile} | sed "/#/d" | cut -f1-3 -d' ' | sort -g -u > PartialRanges_${myparRanges}/max-ranges-${rpfile}
-         paste -d' ' PartialRanges_${myparRanges}/min-ranges-${rpfile} - <<< $(cut -f3 -d' ' PartialRanges_${myparRanges}/max-ranges-${rpfile}) > PartialRanges_${myparRanges}/${projectile}-ranges-${rpfile}
-         rm -f PartialRanges_${myparRanges}/min-ranges-${rpfile} PartialRanges_${myparRanges}/max-ranges-${rpfile}
-         RunCalculateRanges "PartialRanges_${myparRanges}" "${projectile}-ranges-${rpfile}" "${rpfile}"
-      done
-      wait
-      unset rpfiles
-      unset string
-   fi
-}
-
-function CalculateChi {
-   if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element} ] ; then
-      echo "Calculating chi2 for nucleus ${mass}${element} run with talys version ${talys_version}" >> ${LogFile}
-      if [ -d ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2 ] ; then
-         rm -rf ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2/*
-      else
-         mkdir -p ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/chi2
-      fi
-      expfiles=$(ls ${TalysWorkDir}/data/${mass}${element}/* 2>/dev/null | sed "s/.*\/.*${element}\/\(.*\)/\1/g") #"
-      ztar=$(grep ${mass}${element} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
-      mtar=$(grep ${mass}${element} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
-      for expfile in ${expfiles[@]} ; do
-         reaction=$(echo ${expfile} | sed "s/.*\_\([pan][gnpa]\)\_.*/\1/g") #"
-	 expfilestate=$(echo ${expfile} | grep -oh [Lt][o0-9][t0-9])
-         case ${reaction} in
-            pg ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+1))*.${expfilestate} 2>/dev/null) ; beam=p ;;
-            pn ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=p ;;
-            pp ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=p ;;
-            pa ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-1))*$(($mass-3))*.${expfilestate} 2>/dev/null) ; beam=p ;;
-            ag ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+2))*$(($mass+4))*.${expfilestate} 2>/dev/null) ; beam=a ;;
-            an ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+2))*$(($mass+3))*.${expfilestate} 2>/dev/null) ; beam=a ;;
-            ap ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+1))*$(($mass+3))*.${expfilestate} 2>/dev/null) ; beam=a ;;
-            aa ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=a ;;
-            ng ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+1))*.${expfilestate} 2>/dev/null) ; beam=n ;;
-            nn ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar+0))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=n ;;
-            np ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-1))*$(($mass+0))*.${expfilestate} 2>/dev/null) ; beam=n ;;
-            na ) csfiles=$(ls ${InputWorkDir}/Talys-${talys_version}/${mass}${element}/*/rp*$(($ztar-2))*$(($mass-3))*.${expfilestate} 2>/dev/null) ; beam=n ;;
-         esac
-         for csfile in ${csfiles[@]} ; do
-            RunCalculateChi
-         done
-         unset csfiles
-         unset beam
-      done
-      unset expfiles
-   fi
-}
