@@ -820,7 +820,7 @@ ConfigOptionsSettedValue[ChiFlag]="n"
 
 ConfigOptions+=( "PartialRanges" )
 ConfigOptionsSetText[PartialRanges]="Calculate Partial Ranges (optional)"
-ConfigOptionsSettedValue[PartialRanges]="1n++8 +y+43"
+ConfigOptionsSettedValue[PartialRanges]="a2pnl*s3m[13] a2pnl*s3m[13]"
 
 ConfigOptions+=( "Ratios" )
 ConfigOptionsSetText[Ratios]="Calculate ratio (numerators / denominators) (both can be more than one)"
