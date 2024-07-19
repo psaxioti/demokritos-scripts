@@ -458,18 +458,15 @@ function CheckIfNeedToRunTalys {
 }
 
 function RunTalys {
-   (
-      while [[ "`ps -au ${USER}  | grep talys | wc -l`" -ge "${NumberOfWorkingThreads}" ]] ; do sleep 1 ; done
-      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
-      ${TalysExecutable} < input > output
-      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Finished running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+   VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+   ${TalysExecutable} < input > output
+   VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Finished running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
 
-      if grep -q "\-rrgs" <<< "$(basename ${CompinationWorkDir})" ; then
-         for file in astrorate.* ; do mv ${file} ${file}_gs ; done
-         unset file
-         VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Added _gs extention to astrorate files in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
-      fi
-   ) &
+   if grep -q "\-rrgs" <<< "$(basename ${CompinationWorkDir})" ; then
+      for file in astrorate.* ; do mv ${file} ${file}_gs ; done
+      unset file
+      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Added _gs extention to astrorate files in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+   fi
 }
 
 function RunTalysCompination {
@@ -486,24 +483,22 @@ function RunTalysCompination {
 }
 
 function PrepareAndRunRatios {
-   (
-      local enum
-      while [[ ! $(grep "${CurrentCompinationIndex}\/${NumberOfCompinations}.*Finished.*${TalysExecutable}.*$(basename ${CompinationWorkDir}).*${NucleusA}${NucleusSymbol}" ${LogFile} ) ]] ; do sleep 1 ; done
-      for numeratorFile in ${Ratios[0]//|/ } ; do
-         [ ! -e "${CompinationWorkDir}/${numeratorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Numerator file ${numeratorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
-         for denominatorFile in ${Ratios[1]//|/ } ; do
-            [ ! -e "${CompinationWorkDir}/${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Denominator file ${denominatorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
-            [ "${numeratorFile}" == "${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Identical numerator and denominator file ${denominatorFile}. Skipping ratio calculation!!!\n" && continue
-            local RatioCalcDir="${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/Ratios/$(basename ${CompinationWorkDir})"
-            [ ! -d ${RatioCalcDir} ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating ratio folder ${RatioCalcDir}\n" && mkdir -p ${RatioCalcDir}
-            VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Calculating ratio ${numeratorFile} over ${denominatorFile} in ${RatioCalcDir}\n"
-            ratio "${CompinationWorkDir}/${numeratorFile}" "${CompinationWorkDir}/${denominatorFile}" > "${RatioCalcDir}/${numeratorFile}_over_${denominatorFile}"
-            unset RatioCalcDir
-         done
+   local enum
+   while [[ ! $(grep "${CurrentCompinationIndex}\/${NumberOfCompinations}.*Finished.*${TalysExecutable}.*$(basename ${CompinationWorkDir}).*${NucleusA}${NucleusSymbol}" ${LogFile} ) ]] ; do sleep 1 ; done
+   for numeratorFile in ${Ratios[0]//|/ } ; do
+      [ ! -e "${CompinationWorkDir}/${numeratorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Numerator file ${numeratorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
+      for denominatorFile in ${Ratios[1]//|/ } ; do
+         [ ! -e "${CompinationWorkDir}/${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Denominator file ${denominatorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
+         [ "${numeratorFile}" == "${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Identical numerator and denominator file ${denominatorFile}. Skipping ratio calculation!!!\n" && continue
+         local RatioCalcDir="${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/Ratios/$(basename ${CompinationWorkDir})"
+         [ ! -d ${RatioCalcDir} ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating ratio folder ${RatioCalcDir}\n" && mkdir -p ${RatioCalcDir}
+         VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Calculating ratio ${numeratorFile} over ${denominatorFile} in ${RatioCalcDir}\n"
+         ratio "${CompinationWorkDir}/${numeratorFile}" "${CompinationWorkDir}/${denominatorFile}" > "${RatioCalcDir}/${numeratorFile}_over_${denominatorFile}"
+         unset RatioCalcDir
       done
-      unset numeratorFile
-      unset denominatorFile
-   ) &
+   done
+   unset numeratorFile
+   unset denominatorFile
 }
 
 function loopMultiKeywords {
@@ -522,12 +517,15 @@ function loopMultiKeywords {
                   continue
                fi
             fi
-            DefineCompinationDirectory
-            if [ ${RunTalysFlag} ] ; then
-               MakeCompinationInput
-               RunTalysCompination
-            fi
-            [ ${Ratios} ] && PrepareAndRunRatios
+            sleep 0.5 ; while (( $(jobs -rp | wc -l) >= ${NumberOfWorkingThreads} )) ; do sleep 1 ; done
+            (
+               DefineCompinationDirectory
+               if [ ${RunTalysFlag} ] ; then
+                  MakeCompinationInput
+                  RunTalysCompination
+               fi
+               [ ${Ratios} ] && PrepareAndRunRatios
+            ) &
             CurrentCompinationIndex=$((${CurrentCompinationIndex}+1))
          fi
       done
