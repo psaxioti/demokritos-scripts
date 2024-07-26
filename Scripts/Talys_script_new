@@ -111,14 +111,18 @@ END_OF_HELP
    unset NewLineSpace
 }
 
-function Set_cmFlag {
+function Set_massesDir {
    find_dir="/usr/share/"
    find_dir="$(find ${find_dir} -iname talys* -print 2>/dev/null | sort | tail -1)"
    [ -d ${find_dir} ] || find_dir="${HOME}"
    massesDir=$(find ${find_dir} \( -iname "ame2020" -or -iname "audi" \) -print -quit 2>/dev/null)
-   [ -d "${massesDir}" ] && VerbosePrint "The masses files used for cm calculations are located in folder ${massesDir}\n"
+   [ -d "${massesDir}" ] && VerbosePrint "The masses files used for cm and/or chi2 calculations are located in folder ${massesDir}\n"
    [ -d "${massesDir}" ] || ScriptExit 5
    unset find_dir
+}
+
+function Set_cmFlag {
+   Set_massesDir
    cmFlag=1
 }
 
@@ -202,7 +206,7 @@ function ReadInputFile {
    
    InputFile="${InputWorkDir}/${InputFileName}_run${InputRunNumber}"
    cp -f ${CurWorkDir}/${UserInputFileName} ${InputFile}
-   LogFile=${LogDir}/${InputFileName}_run${InputRunNumber}.log
+   LogFile=${LogDir}/${InputFileName}_run${InputRunNumber}.$$.log
    unset LogDir
 
    VerbosePrint "Running $(basename $0) for input ${InputFileName}\n"
@@ -223,6 +227,7 @@ function ReadInputFile {
             ;;
          "ChiFlag")
             [ "${ReadText}" == "y" ] && ChiFlag=1
+               Set_massesDir
             ;;
          "PartialRanges")
             [ "${ReadText}" ] && IFS=' ' read -a  PartialRanges <<< ${ReadText}
@@ -401,12 +406,12 @@ function DefineCompinationDirectory {
    done
 
    CompinationWorkDir="${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/${CompinationWorkDir}"
-   VerbosePrint "####\tPreparing to process compination ${CurrentCompinationIndex} of ${NumberOfCompinations}\n"
+   VerbosePrint "####\tPreparing to process compination ${NucleusCurrentCompinationIndex} of ${NumberOfCompinations}\n"
    if [ ! -d ${CompinationWorkDir} ] ; then
       mkdir -p ${CompinationWorkDir}
-      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating folder $(basename ${CompinationWorkDir})\n"
+      VerbosePrint "\t($(PrintCombinationIndex)) Creating folder $(basename ${CompinationWorkDir})\n"
    else
-      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Folder $(basename ${CompinationWorkDir}) already exists!!!\n"
+      VerbosePrint "\t($(PrintCombinationIndex)) Folder $(basename ${CompinationWorkDir}) already exists!!!\n"
    fi
 
    unset dummy
@@ -414,19 +419,23 @@ function DefineCompinationDirectory {
    unset key
 }
 
+function PrintCombinationIndex {
+   echo "${NucleusCurrentCompinationIndex}/${NumberOfCompinations} - ${CurrentCompinationIndex}/${TotalNumberOfCompinations}"
+}
+
 function MakeCompinationInput {
    local CompinationInputFile="${CompinationWorkDir}/input"
    if [ -f ${CompinationInputFile} ] ; then
-      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Input file in $(basename ${CompinationWorkDir}) already exists!!!\n"
+      VerbosePrint "\t($(PrintCombinationIndex)) Input file in $(basename ${CompinationWorkDir}) already exists!!!\n"
       if [ ${ForceRunTalys} ] ; then
-         VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Force running talys... erasing input file in $(basename ${CompinationWorkDir})!!!\n"
+         VerbosePrint "\t($(PrintCombinationIndex)) Force running talys... erasing input file in $(basename ${CompinationWorkDir})!!!\n"
          find ${CompinationWorkDir} -type f -exec rm -f {} +
       else
          CompinationInputFile+="-new"
       fi
    fi
    local key
-   VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating input file $(basename ${CompinationInputFile}) in $(basename ${CompinationWorkDir})\n"
+   VerbosePrint "\t($(PrintCombinationIndex)) Creating input file $(basename ${CompinationInputFile}) in $(basename ${CompinationWorkDir})\n"
    echo "mass ${NucleusA}" > ${CompinationInputFile}
    echo "element ${NucleusSymbol}" >> ${CompinationInputFile}
    for key in ${ConfiguredKeywords[@]} ; do
@@ -442,30 +451,30 @@ function MakeCompinationInput {
 function CheckIfNeedToRunTalys {
    diff input input-new >/dev/null 2>&1
    if [ $? -ne 0 ] ; then
-      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Different input file from previous run. Rerunning talys Calculations!!!\n"
+      VerbosePrint "\t($(PrintCombinationIndex)) Different input file from previous run. Rerunning talys Calculations!!!\n"
    else
       if [ -f output ] ; then
          if grep -q successful output ; then
-            VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Same input file and completed previous run. Nothing to do!!!\n"
-            VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Finished processing ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+            VerbosePrint "\t($(PrintCombinationIndex)) Same input file and completed previous run. Nothing to do!!!\n"
+            VerbosePrint "\t($(PrintCombinationIndex)) Finished processing ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
             return
          fi
       fi
-      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Same input file but incomplet previous run. Rerunning talys Calculations!!!\n"
+      VerbosePrint "\t($(PrintCombinationIndex)) Same input file but incomplet previous run. Rerunning talys Calculations!!!\n"
    fi
    find . ! -name 'input-new' -type f -exec rm -f {} +
    mv input-new input
 }
 
 function RunTalys {
-   VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+   VerbosePrint "\t($(PrintCombinationIndex)) Running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
    ${TalysExecutable} < input > output
-   VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Finished running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+   VerbosePrint "\t($(PrintCombinationIndex)) Finished running ${TalysExecutable} in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
 
    if grep -q "\-rrgs" <<< "$(basename ${CompinationWorkDir})" ; then
       for file in astrorate.* ; do mv ${file} ${file}_gs ; done
       unset file
-      VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Added _gs extention to astrorate files in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
+      VerbosePrint "\t($(PrintCombinationIndex)) Added _gs extention to astrorate files in folder $(basename ${CompinationWorkDir}) for ${NucleusA}${NucleusSymbol}\n"
    fi
 }
 
@@ -484,15 +493,15 @@ function RunTalysCompination {
 
 function PrepareAndRunRatios {
    local enum
-   while [[ ! $(grep "${CurrentCompinationIndex}\/${NumberOfCompinations}.*Finished.*${TalysExecutable}.*$(basename ${CompinationWorkDir}).*${NucleusA}${NucleusSymbol}" ${LogFile} ) ]] ; do sleep 1 ; done
+   while [[ ! $(grep "${NucleusCurrentCompinationIndex}\/${NumberOfCompinations}.*Finished.*${TalysExecutable}.*$(basename ${CompinationWorkDir}).*${NucleusA}${NucleusSymbol}" ${LogFile} ) ]] ; do sleep 1 ; done
    for numeratorFile in ${Ratios[0]//|/ } ; do
-      [ ! -e "${CompinationWorkDir}/${numeratorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Numerator file ${numeratorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
+      [ ! -e "${CompinationWorkDir}/${numeratorFile}" ] && VerbosePrint "\t($(PrintCombinationIndex)) Numerator file ${numeratorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
       for denominatorFile in ${Ratios[1]//|/ } ; do
-         [ ! -e "${CompinationWorkDir}/${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Denominator file ${denominatorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
-         [ "${numeratorFile}" == "${denominatorFile}" ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Identical numerator and denominator file ${denominatorFile}. Skipping ratio calculation!!!\n" && continue
+         [ ! -e "${CompinationWorkDir}/${denominatorFile}" ] && VerbosePrint "\t($(PrintCombinationIndex)) Denominator file ${denominatorFile} doesn't exist in folder $(basename ${CompinationWorkDir}). Skipping ratio calculation!!!\n" && continue
+         [ "${numeratorFile}" == "${denominatorFile}" ] && VerbosePrint "\t($(PrintCombinationIndex)) Identical numerator and denominator file ${denominatorFile}. Skipping ratio calculation!!!\n" && continue
          local RatioCalcDir="${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/Ratios/$(basename ${CompinationWorkDir})"
-         [ ! -d ${RatioCalcDir} ] && VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Creating ratio folder ${RatioCalcDir}\n" && mkdir -p ${RatioCalcDir}
-         VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Calculating ratio ${numeratorFile} over ${denominatorFile} in ${RatioCalcDir}\n"
+         [ ! -d ${RatioCalcDir} ] && VerbosePrint "\t($(PrintCombinationIndex)) Creating ratio folder ${RatioCalcDir}\n" && mkdir -p ${RatioCalcDir}
+         VerbosePrint "\t($(PrintCombinationIndex)) Calculating ratio ${numeratorFile} over ${denominatorFile} in ${RatioCalcDir}\n"
          ratio "${CompinationWorkDir}/${numeratorFile}" "${CompinationWorkDir}/${denominatorFile}" > "${RatioCalcDir}/${numeratorFile}_over_${denominatorFile}"
          unset RatioCalcDir
       done
@@ -512,7 +521,8 @@ function loopMultiKeywords {
          else
             if [ "${CurrentMultKeywordValue["astrogs"]}" == "y" ] || [ "${ConfiguredKeywordsValues["astrogs"]}" == "y" ] ; then
                if [ "${CurrentMultKeywordValue["astro"]}" == "n" ] || [ "${ConfiguredKeywordsValues["astro"]}" == "n" ] || [ ! ${ConfiguredKeywordsValues["astro"]} ] ; then
-                  VerbosePrint "\t(${CurrentCompinationIndex}/${NumberOfCompinations}) Compination with astrogs keyword set, but no astro keyword. Skipping it!!!\n"
+                  VerbosePrint "\t($(PrintCombinationIndex)) Compination with astrogs keyword set, but no astro keyword. Skipping it!!!\n"
+                  NucleusCurrentCompinationIndex=$((${NucleusCurrentCompinationIndex}+1))
                   CurrentCompinationIndex=$((${CurrentCompinationIndex}+1))
                   continue
                fi
@@ -526,6 +536,7 @@ function loopMultiKeywords {
                fi
                [ ${Ratios} ] && PrepareAndRunRatios
             ) &
+            NucleusCurrentCompinationIndex=$((${NucleusCurrentCompinationIndex}+1))
             CurrentCompinationIndex=$((${CurrentCompinationIndex}+1))
          fi
       done
@@ -540,9 +551,9 @@ function PrepareAndRunTalys {
    [ ! ${RunTalysFlag} ] && [ ! ${Ratios} ] && VerbosePrint "Skipping running talys calculations in ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}\n" && return
    VerbosePrint "Preparing to run ${NumberOfCompinations} talys calculations\n"
    declare -A CurrentMultKeywordValue
-   CurrentCompinationIndex=1
+   NucleusCurrentCompinationIndex=1
    loopMultiKeywords ${MultKeywords[@]}
-   unset CurrentCompinationIndex
+   unset NucleusCurrentCompinationIndex
 }
 
 function RunCalculateRanges {
@@ -738,7 +749,7 @@ function CalculateChis {
          local csfile
          for csfile in ${csfiles[@]} ; do
             [ ! ${cmFlag} ] && unset mtar && unset beam
-            chi_calc ${csfile} ${expfile} ${mtar} ${beam} >> ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/chi2/${reaction}-${expfile}-$(basename ${csfile})
+            chi_calc ${csfile} ${expfile} ${mtar} ${beam} >> ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/chi2/${reaction}-$(basename ${expfile})-$(basename ${csfile})
          done
          unset csfile
          unset csfiles
@@ -960,20 +971,30 @@ declare NumberOfCompinations=1
 ReadInputFile
 unset UserInputFileName
 
+TalysVersionIndex=1
+CurrentCompinationIndex=1
+TotalNumberOfCompinations=$((${NumberOfCompinations}*${#Nuclei[@]}*${#TalysVersions[@]}))
 for TalysVersion in ${TalysVersions[@]//|/ } ; do
    [ "${TalysVersion}" == "default" ] && TalysExecutable=talys || TalysExecutable=talys-${TalysVersion}
+   NucleusIndex=1
    for Nucleus in ${Nuclei[@]} ; do
       NucleusA=$(echo ${Nucleus} | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" )
       NucleusSymbol=$(echo ${Nucleus} | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/")
-      VerbosePrint "Preparing to process isotope ${NucleusA}${NucleusSymbol} for talys version ${TalysVersion}\n"
+      VerbosePrint "Preparing to process isotope ${NucleusA}${NucleusSymbol} (${NucleusIndex}/${#Nuclei[@]}) for talys version ${TalysVersion} (${TalysVersionIndex}/${#TalysVersions[@]})\n"
       [ ! -d ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol} ] && mkdir -p ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol} && VerbosePrint "Created folder ${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}\n"
       PrepareAndRunTalys
       VerbosePrint "################################################################################\n"
+      NucleusIndex=$((${NucleusIndex}+1))
    done
+   TalysVersionIndex=$((${TalysVersionIndex}+1))
    unset Nucleus
    unset NucleusA
    unset NucleusSymbol
+   unset NucleusIndex
 done
+unset TalysVersionIndex
+unset TotalNumberOfCompinations
+unset CurrentCompinationIndex
 
 wait
 
