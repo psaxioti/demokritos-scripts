@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Wed Dec  4 22:30:42 UTC 2024 - Michail Axiotis <psaxioti@gmail.com> - 1.0.1
+
+- Bug fix with cbreak keywords
+- Bug fix with absolute path input files
+- Add check for existent talys command
+
+-------------------------------------------------------------------
 Wed Dec  4 12:30:42 UTC 2024 - Michail Axiotis <psaxioti@gmail.com> - 1.0.0
 
 - Removed old Talys_script and replaced it with new (to be tested)

@@ -113,7 +113,7 @@ END_OF_HELP
 
 function Set_massesDir {
    find_dir="/usr/share/"
-   find_dir="$(find ${find_dir} -iname talys* -print 2>/dev/null | sort | tail -1)"
+   find_dir="$(find ${find_dir} -iname "talys-*" -print 2>/dev/null | sort | tail -1)"
    [ -d ${find_dir} ] || find_dir="${HOME}"
    massesDir=$(find ${find_dir} \( -iname "ame2*" -or -iname "audi" \) -print -quit 2>/dev/null)
    [ -d "${massesDir}" ] && VerbosePrint "The masses files used for cm and/or chi2 calculations are located in folder ${massesDir}\n"
@@ -188,7 +188,8 @@ _EOF_
 }
 
 function ReadInputFile {
-   [ ! -s ${CurWorkDir}/${UserInputFileName} ] && ScriptExit 8
+# Bug when absolute path given...
+   [ ! -s ${CurWorkDir}/${UserInputFileName} ] && [ ! -s ${UserInputFileName} ] && ScriptExit 8
    InputFileName=`basename "${UserInputFileName}"`
    InputWorkDir=${TalysWorkDir}/${InputFileName}
    if [ ! -d ${InputWorkDir} ] ; then 
@@ -205,7 +206,7 @@ function ReadInputFile {
    fi
    
    InputFile="${InputWorkDir}/${InputFileName}_run${InputRunNumber}"
-   cp -f ${CurWorkDir}/${UserInputFileName} ${InputFile}
+   [ -s ${CurWorkDir}/${UserInputFileName} ] && cp -f ${CurWorkDir}/${UserInputFileName} ${InputFile} || cp -f ${UserInputFileName} ${InputFile}
    LogFile=${LogDir}/${InputFileName}_run${InputRunNumber}.$$.log
    unset LogDir
 
@@ -226,8 +227,7 @@ function ReadInputFile {
             [ "${ReadText}" == "y" ] && RangesFlag=1
             ;;
          "ChiFlag")
-            [ "${ReadText}" == "y" ] && ChiFlag=1
-               Set_massesDir
+            [ "${ReadText}" == "y" ] && ChiFlag=1 && Set_massesDir
             ;;
          "PartialRanges")
             [ "${ReadText}" ] && IFS=' ' read -a  PartialRanges <<< ${ReadText}
@@ -438,7 +438,7 @@ function MakeCompinationInput {
    VerbosePrint "\t($(PrintCombinationIndex)) Creating input file $(basename ${CompinationInputFile}) in $(basename ${CompinationWorkDir})\n"
    echo "mass ${NucleusA}" > ${CompinationInputFile}
    echo "element ${NucleusSymbol}" >> ${CompinationInputFile}
-   for key in ${ConfiguredKeywords[@]} ; do
+   for key in "${ConfiguredKeywords[@]}" ; do
       local keyvalue
       [ "${CurrentMultKeywordValue[${key}]}" ] && keyvalue=${CurrentMultKeywordValue[${key}]} || keyvalue=${ConfiguredKeywordsValues[${key}]}
       echo "${key} ${keyvalue}" >> ${CompinationInputFile}
@@ -971,12 +971,20 @@ declare NumberOfCompinations=1
 ReadInputFile
 unset UserInputFileName
 
+TalysVersions=( ${TalysVersions[@]//|/ } )
 TalysVersionIndex=1
 CurrentCompinationIndex=1
 TotalNumberOfCompinations=$((${NumberOfCompinations}*${#Nuclei[@]}*${#TalysVersions[@]}))
-for TalysVersion in ${TalysVersions[@]//|/ } ; do
+for TalysVersion in ${TalysVersions[@]} ; do
    [ "${TalysVersion}" == "default" ] && TalysExecutable=talys || TalysExecutable=talys-${TalysVersion}
    NucleusIndex=1
+   if ! command -v ${TalysExecutable} 2>&1 >/dev/null ;then
+      VerbosePrint "Talys version ${TalysVersion} (command ${TalysExecutable}) (${TalysVersionIndex}/${#TalysVersions[@]}) not found. Skipping it!\n"
+      VerbosePrint "################################################################################\n"
+      TalysVersionIndex=$((${TalysVersionIndex}+1))
+      CurrentCompinationIndex=$(( ${CurrentCompinationIndex} + ( ${NumberOfCompinations}*${#Nuclei[@]} ) ))
+      continue
+   fi
    for Nucleus in ${Nuclei[@]} ; do
       NucleusA=${Nucleus//[[:alpha:]]}
       NucleusSymbol=${Nucleus//[[:digit:]]}
@@ -997,9 +1005,13 @@ unset TotalNumberOfCompinations
 unset CurrentCompinationIndex
 
 wait
+VerbosePrint "################################################################################\n"
+VerbosePrint "Finished talys and ratios calculations. Starting calculating ranges and chis if any.\n"
+VerbosePrint "################################################################################\n"
 
-for TalysVersion in ${TalysVersions[@]//|/ } ; do
+for TalysVersion in ${TalysVersions[@]} ; do
    [ "${TalysVersion}" == "default" ] && TalysExecutable=talys || TalysExecutable=talys-${TalysVersion}
+   ! command -v ${TalysExecutable} 2>&1 >/dev/null && continue
    for Nucleus in ${Nuclei[@]} ; do
       NucleusA=${Nucleus//[[:alpha:]]}
       NucleusSymbol=${Nucleus//[[:digit:]]}
