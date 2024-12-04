@@ -1,7 +1,7 @@
 DEBTRANSFORM-RELEASE: 1
-Format:  1.0
+Format:  3.0 (native)
 Source:  demokritos-scripts
 Version: 1.3-0
-Binary:  demokritos-scripts
-Maintainer: Axiotis Michail <psaxioti@gmail.com>
-Build-Depends: debhelper (>= 9), bzr
+Maintainer: Axiotis Michail
+Archetecture: all
+Build-Depends: debhelper-compat (= 13)

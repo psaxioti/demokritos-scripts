@@ -11,7 +11,7 @@ if [ "$?" == "0" ] ; then
    find_dir="${HOME}/.talys"
 else
    pc_type="pc"
-   find_dir="/opt"
+   [ -d "${HOME}/Software/talys" ] && find_dir="${HOME}/Software/talys" || find_dir="/usr/share"
 fi
 
 ####################################################
@@ -477,10 +477,10 @@ else
    done
    
    for talys_version in ${talys_versions[@]} ; do
-      massesDir=$(find ${find_dir} -name "audi" 2>/dev/null | grep $(echo ${talys_version} | sed "s/\.//"))
+      massesDir=$(find ${find_dir} -name "audi" -or -name "ame2*" 2>/dev/null | sort -V | tail -1)
       for nucleus in ${nuclei[@]} ; do
-         mass=$(echo ${nucleus} | sed "s/[a-Z]*\([0-9]*\)[a-Z]*/\1/" ) #"
-         element=$(echo ${nucleus} | sed "s/[0-9]*\([a-Z]*\)[0-9]*/\1/") #"
+         mass=${nucleus//[[:alpha:]]}
+         element=${nucleus//[[:digit:]]}
          for projectile in ${projectiles[@]} ; do
             for alpha_omp in ${alpha_omps[@]} ; do
                for jlm_omp in ${jlm_omps[@]} ; do

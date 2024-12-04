@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Wed Dec  4 12:30:42 UTC 2024 - Michail Axiotis <psaxioti@gmail.com> - 1.0.0
+
+- Removed old Talys_script and replaced it with new (to be tested)
+- Changes to Talys_script_mt to fix bug in newer regex versions
+- Talys scripts alighned to new talys data installations
+
+-------------------------------------------------------------------
 Thu Nov  23 12:00:00 UTC 2023 - Michail Axiotis <psaxioti@gmail.com>
 
 - Major rewrite of mpa2ascii - added as$ convertion

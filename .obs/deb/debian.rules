@@ -1,130 +1,33 @@
 #!/usr/bin/make -f
-# Sample debian/rules that uses debhelper.
-# GNU copyright 1997 to 1999 by Joey Hess.
 
 # Uncomment this to turn on verbose mode.
 export DH_VERBOSE=1
 
-CFLAGS = -g
-ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
-CFLAGS += -O0
-else
-CFLAGS += -O2
-endif
-
 name = $(shell dpkg-parsechangelog | sed -n -e 's/^Source: //p')
 version = $(shell dpkg-parsechangelog | sed -n -e 's/^Version: //p')
-inst_path = /usr/src/packages/BUILD/debian/$(name)/usr/bin
-sources_path = /usr/src/packages/SOURCES
 
-build-arch:
-	dh_testdir
+buildroot = /usr/src/packages/BUILD/debian/$(name)
+_sourcedir = /usr/src/packages/SOURCES
+_bindir = /usr/bin
+_docdir = /usr/share/doc
+_datadir = /usr/share
 
-	# Add here commands to compile the package.
-	# --- end custom part for compiling
+%:
+	dh $@
 
-	touch build-stamp
+override_dh_auto_build:
 
-clean:
-	dh_testdir
-	dh_testroot
-	rm -f build-stamp
+override_dh_auto_install:
+	dh_install -i Scripts/evnt2dat            $(_bindir)
+	dh_install -i Scripts/geant_make          $(_bindir)
+	dh_install -i Scripts/mpa2ascii           $(_bindir)
+	dh_install -i Scripts/Talys_script        $(_bindir)
+	dh_install -i Scripts/Talys_script_mt     $(_bindir)
 
-	# Add here commands to clean up after the build process.
-	#make clean || true
-	# --- end custom part for cleaning up
-
-	dh_clean
-
-install-indep: 
-	dh_testdir
-	dh_testroot
-	dh_prep
-	dh_installdirs
-
-	# Add here commands to install the package
-	# The DESTDIR Has To Be Exactly
-	dpkg-parsechangelog
-	install -Dm755 Scripts/evnt2dat   $(inst_path)/evnt2dat
-	install -Dm755 Scripts/geant_make   $(inst_path)/geant_make
-	install -Dm755 Scripts/mpa2ascii   $(inst_path)/mpa2ascii
-	install -Dm755 Scripts/Talys_script   $(inst_path)/Talys_script
-	install -Dm755 Scripts/Talys_script_mt   $(inst_path)/Talys_script_mt
-	# --- end custom part for installing
-
-install-arch: build-arch
-	dh_testdir
-	dh_testroot
-	#dh_clean -k
-	dh_prep
-	dh_installdirs
-
-	# Add here commands to install the package
-	# The DESTDIR Has To Be Exactly  /usr/src/packages/BUILD/debian/<nameOfPackage>
-	# --- end custom part for installing
-
-# Build architecture-independent files here.
-binary-indep: install-indep
-	dh_testdir
-	dh_testroot
-	dh_installdebconf
-	dh_installdocs
-	dh_installexamples
-	dh_installmenu
-	dh_installlogrotate
-	dh_installemacsen
-	dh_installpam
-	dh_installmime
-	dh_installinit
-	dh_installcron
-	dh_installman
-	dh_installinfo
-#	dh_undocumented
-	dh_installchangelogs
-	dh_link
-	dh_strip
-	dh_compress
+override_dh_fixperms:
 	dh_fixperms
-	dh_makeshlibs
-	dh_installdeb
-	dh_perl
-#	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
-	dh_shlibdeps
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb -i
-	# We have nothing to do by default.
-
-# Build architecture-dependent files here.
-binary-arch: build-arch install-arch
-	dh_testdir
-	dh_testroot
-	dh_installdebconf
-	dh_installdocs
-	dh_installexamples
-	dh_installmenu
-	dh_installlogrotate
-	dh_installemacsen
-	dh_installpam
-	dh_installmime
-	dh_installinit
-	dh_installcron
-	dh_installman
-	dh_installinfo
-#	dh_undocumented
-	dh_installchangelogs
-	dh_link
-	dh_strip
-	dh_compress
-	dh_fixperms
-	dh_makeshlibs
-	dh_installdeb
-	dh_perl
-#	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
-	dh_shlibdeps
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb -a
-
-binary: binary-indep binary-arch
-.PHONY: build clean binary-indep binary-arch binary install
+	chmod 0755 $(buildroot)$(_bindir)/evnt2dat
+	chmod 0755 $(buildroot)$(_bindir)/geant_make
+	chmod 0755 $(buildroot)$(_bindir)/mpa2ascii
+	chmod 0755 $(buildroot)$(_bindir)/Talys_script
+	chmod 0755 $(buildroot)$(_bindir)/Talys_script_mt
