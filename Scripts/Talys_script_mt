@@ -238,7 +238,9 @@ function CalculateChi {
       fi
       expfiles=$(ls ${TalysWorkDir}/data/${mass}${element}/* 2>/dev/null | sed "s/.*\/.*${element}\/\(.*\)/\1/g") #"
       ztar=$(grep ${mass}${element} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f2 -d' ')
+      if [ ! ${ztar} ] ; then ztar=$(grep ${element}.*${mass} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f2 -d' ') ; fi
       mtar=$(grep ${mass}${element} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f4 -d' ')
+      if [ ! ${mtar} ] ; then mtar=$(grep ${element}.*${mass} ${massesDir}/* | sed "s/\ \+/\ /g" | cut -f4 -d' ') ; fi
       for expfile in ${expfiles[@]} ; do
          reaction=$(echo ${expfile} | sed "s/.*\_\([pan][gnpa]\)\_.*/\1/g") #"
 	 expfilestate=$(echo ${expfile} | grep -oh [Lt][o0-9][t0-9])

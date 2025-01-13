@@ -566,7 +566,7 @@ function RunCalculateRanges {
    [ ! -d "${RangesFolder}" ] && return
    rm -rf ${RangesFolder}/*-ranges
    local proj
-   for proj in $(ls ${RangesSearchFolder} | sed "s|^\([a-z]\)-.*|\1|" | sed "s|[a-z][a-z]\+||" | sort -u) ; do
+   for proj in $(ls ${RangesSearchFolder} | sed "s|^\([[:alpha:]]\)-.*|\1|" | sed "s|[[:alpha:]][[:alpha:]]\+||" | sort -u) ; do
       local rangeFiles
       local HelperRangeFolder="*${RangesSearchFolder}/${proj}-"
       rangeFiles=`find ${RangesSearchFolder} \( -ipath ${HelperRangeFolder}${RangesFolderPattern// /* -or -ipath ${HelperRangeFolder}}* \) \( -iname ${RangesFilePattern// / -or -iname } \) -exec basename {} \; | sort -u`
@@ -577,6 +577,7 @@ function RunCalculateRanges {
          find ${RangesSearchFolder} \( -ipath ${HelperRangeFolder}${RangesFolderPattern// /* -or -ipath ${HelperRangeFolder}}* \) \( -iname ${file} \) -exec cat {} >> ${RangesFolder}/${proj}-${file}-ranges-dum \;
          sed -i "/#/d" ${RangesFolder}/${proj}-${file}-ranges-dum
          sed -i "s|^[[:blank:]]*||g" ${RangesFolder}/${proj}-${file}-ranges-dum
+         sed -i "s|[[:blank:]]\+| |g" ${RangesFolder}/${proj}-${file}-ranges-dum
          cut -f1-2 -d' ' ${RangesFolder}/${proj}-${file}-ranges-dum > ${RangesFolder}/${proj}-${file}-ranges
          sort -g -k2 ${RangesFolder}/${proj}-${file}-ranges | sort -g -u > ${RangesFolder}/${proj}-${file}-ranges-min
          sort -g -k2 -r ${RangesFolder}/${proj}-${file}-ranges | sort -g -u > ${RangesFolder}/${proj}-${file}-ranges-max

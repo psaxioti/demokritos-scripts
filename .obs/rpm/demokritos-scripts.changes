@@ -1,4 +1,10 @@
 -------------------------------------------------------------------
+Mon Jan 13 22:30:42 UTC 2025 - Michail Axiotis <psaxioti@gmail.com> - 1.0.2
+
+- Bug fix for masses in newer talys versions (Talys_script_mt)
+- Bug fix for ranges calculations (Talys_script)
+
+-------------------------------------------------------------------
 Wed Dec  4 22:30:42 UTC 2024 - Michail Axiotis <psaxioti@gmail.com> - 1.0.1
 
 - Bug fix with cbreak keywords
