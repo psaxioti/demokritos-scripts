@@ -1,4 +1,9 @@
 -------------------------------------------------------------------
+Thu Jan 30 22:30:42 UTC 2025 - Michail Axiotis <psaxioti@gmail.com> - 1.0.3
+
+- Bug fix for mpa2ascii when an intemediate ADC is missing
+
+-------------------------------------------------------------------
 Mon Jan 13 22:30:42 UTC 2025 - Michail Axiotis <psaxioti@gmail.com> - 1.0.2
 
 - Bug fix for masses in newer talys versions (Talys_script_mt)

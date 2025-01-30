@@ -260,7 +260,7 @@ function mpa_to_ascii {
          echo "$(sed -n "/ADC${3}/,/[DA][AD][TC][0-9A]/ p" ${2} | sed -n "/${1}/p" | sed "s/.*=\(.*\)/\1/" | sed "s/\r$//")"
          ;;
       convert)
-         sed -n "/DATA$((${4}-1))/,/DATA${4}/ p" ${2} | sed "/DATA/ d" > ${3}
+         sed -n "/DATA$((${4}-1))/,/DATA/ p" ${2} | sed "/DATA/ d" > ${3}
          unset LADC
          ;;
       *)
@@ -504,7 +504,6 @@ while getopts ${ShortOptions} opt ; do
    esac
 done
 shift $(expr $OPTIND - 1) # remove options from positional parameters
-
 
 files=("${@}")
 

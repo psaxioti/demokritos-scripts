@@ -1,3 +1,9 @@
+demokritos-scripts (1.0.3-0) stable; urgency=low
+
+  * Bug fix for mpa2ascii when an intemediate ADC is missing
+
+ -- Axiotis Michail <psaxioti@gmail.com>  Thu, 30 Jan 2025 20:00:00 +0200
+
 demokritos-scripts (1.0.2-0) stable; urgency=low
 
   * Bug fix for masses in newer talys versions (Talys_script_mt)
