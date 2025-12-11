@@ -1,3 +1,9 @@
+demokritos-scripts (1.0.4-0) stable; urgency=low
+
+  * Bug fix for Talys_script to calculate ranges of ratios
+
+ -- Axiotis Michail <psaxioti@gmail.com>  Thu, 11 Dec 2025 20:00:00 +0200
+
 demokritos-scripts (1.0.3-0) stable; urgency=low
 
   * Bug fix for mpa2ascii when an intemediate ADC is missing

@@ -631,7 +631,7 @@ function CalculateRatiosRanges {
    local searchFolder=${InputWorkDir}/${TalysExecutable}/${NucleusA}${NucleusSymbol}/Ratios
    local rangesFolder=${searchFolder}/Ranges
    local rangesFolderPatern="*"
-   local rangesFilePattern="*"
+   local rangesFilePattern="*_over_*"
    local rangesDescription='ratio ranges'
    RunCalculateRanges "${searchFolder}" "${rangesFolder}" "${rangesFolderPatern}" "${rangesFilePattern}" "${rangesDescription}"
    unset searchFolder

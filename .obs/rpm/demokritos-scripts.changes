@@ -1,4 +1,9 @@
 -------------------------------------------------------------------
+Thu Dec 11 22:30:42 UTC 2025 - Michail Axiotis <psaxioti@gmail.com> - 1.0.4
+
+- Bug fix for Talys_script to calculate ranges of ratios
+
+-------------------------------------------------------------------
 Thu Jan 30 22:30:42 UTC 2025 - Michail Axiotis <psaxioti@gmail.com> - 1.0.3
 
 - Bug fix for mpa2ascii when an intemediate ADC is missing
